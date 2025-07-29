@@ -148,3 +148,31 @@ def test_league_table_tiebreakers():
     df = pd.DataFrame(data)
     table = league_table(df)
     assert list(table.team[:2]) == ["B", "A"]
+
+
+def test_simulate_final_table_zero_expected_goals_draws():
+    df = pd.DataFrame(
+        [
+            {
+                "date": "2025-01-01",
+                "home_team": "A",
+                "away_team": "B",
+                "home_score": 1,
+                "away_score": 0,
+            },
+            {
+                "date": "2025-01-02",
+                "home_team": "B",
+                "away_team": "A",
+                "home_score": np.nan,
+                "away_score": np.nan,
+            },
+        ]
+    )
+    rng = np.random.default_rng(42)
+    table = simulator.simulate_final_table(
+        df, iterations=1, rng=rng, expected_goals=0
+    )
+    points = dict(zip(table.team, table.points.round().astype(int)))
+    assert points["A"] == 4
+    assert points["B"] == 1

@@ -166,30 +166,37 @@ def _simulate_table(
     remaining: pd.DataFrame,
     rng: np.random.Generator,
     strengths: Dict[str, float] | None = None,
+    *,
+    expected_goals: float = 1.2,
 ) -> pd.DataFrame:
-    """Simulate remaining fixtures using team strengths."""
+    """Simulate remaining fixtures using team strengths.
+
+    Parameters
+    ----------
+    expected_goals:
+        Average goals scored by each side in a match. This is used as the
+        base Poisson mean when generating random scores.
+    """
     sims: list[dict] = []
     for _, row in remaining.iterrows():
         home = row["home_team"]
         away = row["away_team"]
 
         if strengths is None:
-            p = [1 / 3, 1 / 3, 1 / 3]
+            lam_home = expected_goals
+            lam_away = expected_goals
         else:
             s_h = strengths.get(home, 1.0)
             s_a = strengths.get(away, 1.0)
-            p_draw = 0.2
-            p_home = (1 - p_draw) * s_h / (s_h + s_a)
-            p_away = (1 - p_draw) * s_a / (s_h + s_a)
-            p = [p_home, p_draw, p_away]
+            total = s_h + s_a
+            if total == 0:
+                lam_home = lam_away = expected_goals
+            else:
+                lam_home = expected_goals * (2 * s_h / total)
+                lam_away = expected_goals * (2 * s_a / total)
 
-        outcome = rng.choice(3, p=p)
-        if outcome == 0:  # home win
-            hs, as_ = 1, 0
-        elif outcome == 1:  # draw
-            hs, as_ = 0, 0
-        else:  # away win
-            hs, as_ = 0, 1
+        hs = int(rng.poisson(lam_home))
+        as_ = int(rng.poisson(lam_away))
         sims.append(
             {
                 "date": row["date"],
@@ -213,6 +220,7 @@ def simulate_chances(
     *,
     rng: np.random.Generator | None = None,
     strengths: Dict[str, float] | None = None,
+    expected_goals: float = 1.2,
 ) -> Dict[str, float]:
     """Return title probabilities using the given team strengths."""
     if rng is None:
@@ -225,7 +233,13 @@ def simulate_chances(
     remaining = matches[matches["home_score"].isna() | matches["away_score"].isna()]
 
     for _ in range(iterations):
-        table = _simulate_table(played_df, remaining, rng, strengths)
+        table = _simulate_table(
+            played_df,
+            remaining,
+            rng,
+            strengths,
+            expected_goals=expected_goals,
+        )
         champs[table.iloc[0]["team"]] += 1
 
     for t in champs:
@@ -239,6 +253,7 @@ def simulate_relegation_chances(
     *,
     rng: np.random.Generator | None = None,
     strengths: Dict[str, float] | None = None,
+    expected_goals: float = 1.2,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
     if rng is None:
@@ -251,7 +266,13 @@ def simulate_relegation_chances(
     remaining = matches[matches["home_score"].isna() | matches["away_score"].isna()]
 
     for _ in range(iterations):
-        table = _simulate_table(played_df, remaining, rng, strengths)
+        table = _simulate_table(
+            played_df,
+            remaining,
+            rng,
+            strengths,
+            expected_goals=expected_goals,
+        )
         for team in table.tail(4)["team"]:
             relegated[team] += 1
 
@@ -266,6 +287,7 @@ def simulate_final_table(
     *,
     rng: np.random.Generator | None = None,
     strengths: Dict[str, float] | None = None,
+    expected_goals: float = 1.2,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
     if rng is None:
@@ -279,7 +301,13 @@ def simulate_final_table(
     remaining = matches[matches["home_score"].isna() | matches["away_score"].isna()]
 
     for _ in range(iterations):
-        table = _simulate_table(played_df, remaining, rng, strengths)
+        table = _simulate_table(
+            played_df,
+            remaining,
+            rng,
+            strengths,
+            expected_goals=expected_goals,
+        )
         for idx, row in table.iterrows():
             pos_totals[row["team"]] += idx + 1
             points_totals[row["team"]] += row["points"]
@@ -305,16 +333,29 @@ def summary_table(
     *,
     rng: np.random.Generator | None = None,
     strengths: Dict[str, float] | None = None,
+    expected_goals: float = 1.2,
 ) -> pd.DataFrame:
     """Return a combined projection table."""
     chances = simulate_chances(
-        matches, iterations=iterations, rng=rng, strengths=strengths
+        matches,
+        iterations=iterations,
+        rng=rng,
+        strengths=strengths,
+        expected_goals=expected_goals,
     )
     relegation = simulate_relegation_chances(
-        matches, iterations=iterations, rng=rng, strengths=strengths
+        matches,
+        iterations=iterations,
+        rng=rng,
+        strengths=strengths,
+        expected_goals=expected_goals,
     )
     table = simulate_final_table(
-        matches, iterations=iterations, rng=rng, strengths=strengths
+        matches,
+        iterations=iterations,
+        rng=rng,
+        strengths=strengths,
+        expected_goals=expected_goals,
     )
 
     table = table.sort_values("position").reset_index(drop=True)
