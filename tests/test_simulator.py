@@ -81,6 +81,63 @@ def test_summary_table_deterministic():
     assert {"position", "team", "points", "title", "relegation"}.issubset(table1.columns)
 
 
+def _strengths_from_df(df: pd.DataFrame) -> dict:
+    teams = sorted(pd.unique(df[["home_team", "away_team"]].values.ravel()))
+    return {t: i + 1 for i, t in enumerate(teams)}
+
+
+def test_simulate_chances_strengths_seed_repeatability():
+    df = parse_matches("data/Brasileirao2025A.txt")
+    strengths = _strengths_from_df(df)
+    rng = np.random.default_rng(7)
+    first = simulate_chances(df, iterations=5, rng=rng, strengths=strengths)
+    rng = np.random.default_rng(7)
+    second = simulate_chances(df, iterations=5, rng=rng, strengths=strengths)
+    assert first == second
+
+
+def test_simulate_relegation_chances_strengths_seed_repeatability():
+    df = parse_matches("data/Brasileirao2025A.txt")
+    strengths = _strengths_from_df(df)
+    rng = np.random.default_rng(8)
+    first = simulator.simulate_relegation_chances(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    rng = np.random.default_rng(8)
+    second = simulator.simulate_relegation_chances(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    assert first == second
+
+
+def test_simulate_final_table_strengths_deterministic():
+    df = parse_matches("data/Brasileirao2025A.txt")
+    strengths = _strengths_from_df(df)
+    rng = np.random.default_rng(9)
+    table1 = simulator.simulate_final_table(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    rng = np.random.default_rng(9)
+    table2 = simulator.simulate_final_table(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    pd.testing.assert_frame_equal(table1, table2)
+
+
+def test_summary_table_strengths_deterministic():
+    df = parse_matches("data/Brasileirao2025A.txt")
+    strengths = _strengths_from_df(df)
+    rng = np.random.default_rng(10)
+    table1 = simulator.summary_table(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    rng = np.random.default_rng(10)
+    table2 = simulator.summary_table(
+        df, iterations=5, rng=rng, strengths=strengths
+    )
+    pd.testing.assert_frame_equal(table1, table2)
+
+
 def test_league_table_tiebreakers():
     data = [
         {"date": "2025-01-01", "home_team": "A", "away_team": "B", "home_score": 1, "away_score": 2},
