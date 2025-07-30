@@ -8,45 +8,77 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 import argparse
+
 import numpy as np
-from brasileirao import (
+import pandas as pd
+
+from simulator import (
     parse_matches,
-    simulate_chances,
-    simulate_relegation_chances,
-    simulate_final_table,
     summary_table,
-    league_table,
+    DEFAULT_JOBS,
+    DEFAULT_TIE_PERCENT,
 )
+
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simulate Brasileirão 2025 title odds")
-    parser.add_argument("--file", default="data/Brasileirao2025A.txt", help="fixture file path")
-    parser.add_argument("--simulations", type=int, default=1000, help="number of simulation runs")
+    parser.add_argument(
+        "--file", default="data/Brasileirao2025A.txt", help="fixture file path"
+    )
+    parser.add_argument(
+        "--simulations", type=int, default=5000, help="number of simulation runs"
+    )
     parser.add_argument(
         "--seed",
         type=int,
         default=None,
         help="random seed for repeatable simulations",
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_false",
+        dest="progress",
+        default=True,
+        help="disable the progress bar during simulations",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=DEFAULT_JOBS,
+        help="number of parallel workers",
+    )
+    parser.add_argument(
+        "--from-date",
+        dest="from_date",
+        default=None,
+        help="ignore results on or after this YYYY-MM-DD date",
+    )
+    parser.add_argument(
+        "--html-output",
+        default=os.path.join(os.path.dirname(__file__), "brasileirao.html"),
+        help="path to save summary table as HTML",
+    )
     args = parser.parse_args()
 
     matches = parse_matches(args.file)
+    if args.from_date:
+        from_date = pd.to_datetime(args.from_date)
+        matches.loc[matches["date"] >= from_date, ["home_score", "away_score"]] = np.nan
     rng = np.random.default_rng(args.seed) if args.seed is not None else None
-    chances = simulate_chances(matches, iterations=args.simulations, rng=rng)
-    relegation = simulate_relegation_chances(
-        matches, iterations=args.simulations, rng=rng
-    )
-    table_proj = simulate_final_table(
-        matches, iterations=args.simulations, rng=rng
-    )
+    # Fixed simulation parameters
+    tie_prob = DEFAULT_TIE_PERCENT / 100.0
 
-    summary = table_proj.copy()
-    summary["title"] = summary["team"].map(chances)
-    summary["relegation"] = summary["team"].map(relegation)
-    summary = summary.sort_values("position").reset_index(drop=True)
-    summary["position"] = range(1, len(summary) + 1)
-    summary["points"] = summary["points"].round().astype(int)
+    summary = summary_table(
+        matches,
+        iterations=args.simulations,
+        rng=rng,
+        progress=args.progress,
+        tie_prob=tie_prob,
+        n_jobs=args.jobs,
+    )
+    if args.html_output:
+        summary.to_html(args.html_output, index=False)
 
     TITLE_W = 7
     REL_W = 10

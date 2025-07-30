@@ -1,18 +1,19 @@
 import sys, os; sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 import pandas as pd
 import numpy as np
-from brasileirao import parse_matches, league_table, simulate_chances
-from brasileirao import simulator
+import pytest
+from simulator import parse_matches, league_table, simulate_chances
+import simulator
 
 
 def test_parse_matches():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     assert len(df) == 380
     assert {'home_team', 'away_team', 'home_score', 'away_score'}.issubset(df.columns)
 
 
 def test_league_table():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     table = league_table(df)
     assert 'points' in table.columns
     assert table['played'].max() > 0
@@ -30,112 +31,71 @@ def test_league_table_deterministic_sorting():
 
 
 def test_simulate_chances_sum_to_one():
-    df = parse_matches('data/Brasileirao2025A.txt')
-    chances = simulate_chances(df, iterations=10)
+    df = parse_matches('data/Brasileirao2024A.txt')
+    chances = simulate_chances(df, iterations=10, progress=False)
     assert abs(sum(chances.values()) - 1.0) < 1e-6
 
 
 def test_simulate_chances_seed_repeatability():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     rng = np.random.default_rng(1234)
-    chances1 = simulate_chances(df, iterations=5, rng=rng)
+    chances1 = simulate_chances(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     rng = np.random.default_rng(1234)
-    chances2 = simulate_chances(df, iterations=5, rng=rng)
+    chances2 = simulate_chances(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     assert chances1 == chances2
 
 
 
 
 def test_simulate_relegation_chances_sum_to_four():
-    df = parse_matches('data/Brasileirao2025A.txt')
-    probs = simulator.simulate_relegation_chances(df, iterations=10)
+    df = parse_matches('data/Brasileirao2024A.txt')
+    probs = simulator.simulate_relegation_chances(df, iterations=10, progress=False)
     assert abs(sum(probs.values()) - 4.0) < 1e-6
 
 
 def test_simulate_relegation_chances_seed_repeatability():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     rng = np.random.default_rng(123)
-    first = simulator.simulate_relegation_chances(df, iterations=5, rng=rng)
+    first = simulator.simulate_relegation_chances(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     rng = np.random.default_rng(123)
-    second = simulator.simulate_relegation_chances(df, iterations=5, rng=rng)
+    second = simulator.simulate_relegation_chances(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     assert first == second
 
 
 def test_simulate_final_table_deterministic():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     rng = np.random.default_rng(1)
-    table1 = simulator.simulate_final_table(df, iterations=5, rng=rng)
+    table1 = simulator.simulate_final_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     rng = np.random.default_rng(1)
-    table2 = simulator.simulate_final_table(df, iterations=5, rng=rng)
+    table2 = simulator.simulate_final_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     pd.testing.assert_frame_equal(table1, table2)
     assert {"team", "position", "points"}.issubset(table1.columns)
 
 
 def test_summary_table_deterministic():
-    df = parse_matches('data/Brasileirao2025A.txt')
+    df = parse_matches('data/Brasileirao2024A.txt')
     rng = np.random.default_rng(5)
-    table1 = simulator.summary_table(df, iterations=5, rng=rng)
+    table1 = simulator.summary_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     rng = np.random.default_rng(5)
-    table2 = simulator.summary_table(df, iterations=5, rng=rng)
+    table2 = simulator.summary_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
     pd.testing.assert_frame_equal(table1, table2)
     assert {"position", "team", "points", "title", "relegation"}.issubset(table1.columns)
-
-
-def _strengths_from_df(df: pd.DataFrame) -> dict:
-    teams = sorted(pd.unique(df[["home_team", "away_team"]].values.ravel()))
-    return {t: i + 1 for i, t in enumerate(teams)}
-
-
-def test_simulate_chances_strengths_seed_repeatability():
-    df = parse_matches("data/Brasileirao2025A.txt")
-    strengths = _strengths_from_df(df)
-    rng = np.random.default_rng(7)
-    first = simulate_chances(df, iterations=5, rng=rng, strengths=strengths)
-    rng = np.random.default_rng(7)
-    second = simulate_chances(df, iterations=5, rng=rng, strengths=strengths)
-    assert first == second
-
-
-def test_simulate_relegation_chances_strengths_seed_repeatability():
-    df = parse_matches("data/Brasileirao2025A.txt")
-    strengths = _strengths_from_df(df)
-    rng = np.random.default_rng(8)
-    first = simulator.simulate_relegation_chances(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    rng = np.random.default_rng(8)
-    second = simulator.simulate_relegation_chances(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    assert first == second
-
-
-def test_simulate_final_table_strengths_deterministic():
-    df = parse_matches("data/Brasileirao2025A.txt")
-    strengths = _strengths_from_df(df)
-    rng = np.random.default_rng(9)
-    table1 = simulator.simulate_final_table(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    rng = np.random.default_rng(9)
-    table2 = simulator.simulate_final_table(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    pd.testing.assert_frame_equal(table1, table2)
-
-
-def test_summary_table_strengths_deterministic():
-    df = parse_matches("data/Brasileirao2025A.txt")
-    strengths = _strengths_from_df(df)
-    rng = np.random.default_rng(10)
-    table1 = simulator.summary_table(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    rng = np.random.default_rng(10)
-    table2 = simulator.summary_table(
-        df, iterations=5, rng=rng, strengths=strengths
-    )
-    pd.testing.assert_frame_equal(table1, table2)
 
 
 def test_league_table_tiebreakers():
@@ -150,29 +110,105 @@ def test_league_table_tiebreakers():
     assert list(table.team[:2]) == ["B", "A"]
 
 
-def test_simulate_final_table_zero_expected_goals_draws():
-    df = pd.DataFrame(
+def test_simulate_table_no_draws_when_zero_tie():
+    played = pd.DataFrame(
+        [],
+        columns=["date", "home_team", "away_team", "home_score", "away_score"],
+    )
+    remaining = pd.DataFrame(
         [
-            {
-                "date": "2025-01-01",
-                "home_team": "A",
-                "away_team": "B",
-                "home_score": 1,
-                "away_score": 0,
-            },
-            {
-                "date": "2025-01-02",
-                "home_team": "B",
-                "away_team": "A",
-                "home_score": np.nan,
-                "away_score": np.nan,
-            },
+            {"date": "2025-01-01", "home_team": "A", "away_team": "B"},
+            {"date": "2025-01-02", "home_team": "B", "away_team": "A"},
         ]
     )
-    rng = np.random.default_rng(42)
-    table = simulator.simulate_final_table(
-        df, iterations=1, rng=rng, expected_goals=0
+    rng = np.random.default_rng(4)
+    table = simulator._simulate_table(
+        played,
+        remaining,
+        rng,
+        tie_prob=0.0,
     )
-    points = dict(zip(table.team, table.points.round().astype(int)))
-    assert points["A"] == 4
-    assert points["B"] == 1
+    assert table["draws"].sum() == 0
+
+
+def test_simulate_final_table_custom_params_deterministic():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(9)
+    t1 = simulator.simulate_final_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.2,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(9)
+    t2 = simulator.simulate_final_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.2,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_progress_default_true(monkeypatch):
+    df = parse_matches("data/Brasileirao2024A.txt")
+    called = {}
+
+    def fake_tqdm(iterable, **kwargs):
+        called["used"] = True
+        return iterable
+
+    monkeypatch.setattr(simulator, "tqdm", fake_tqdm)
+    simulator.simulate_chances(df, iterations=1)
+    assert called.get("used", False)
+
+
+def test_parallel_consistency():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(6)
+    serial = simulator.summary_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=1
+    )
+    rng = np.random.default_rng(6)
+    parallel = simulator.summary_table(
+        df, iterations=5, rng=rng, progress=False, n_jobs=2
+    )
+    pd.testing.assert_frame_equal(serial, parallel)
+
+
+
+
+def test_dynamic_params_deterministic():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(42)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(42)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_reset_results_from():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    start = "2024-07-01"
+    reset = simulator.reset_results_from(df, start)
+    mask = reset["date"] >= pd.to_datetime(start)
+    assert reset.loc[mask, ["home_score", "away_score"]].isna().all().all()
+    # ensure simulation runs without errors
+    simulator.simulate_chances(reset, iterations=1, progress=False)
+
+
+
