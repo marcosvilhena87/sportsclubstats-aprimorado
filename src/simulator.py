@@ -220,13 +220,23 @@ def away_goal_rate(matches: pd.DataFrame) -> float:
     played = matches.dropna(subset=["home_score", "away_score"])
     return float(played["away_score"].mean())
 
+
+def estimate_home_field_advantage(matches: pd.DataFrame) -> float:
+    """Estimate the home field advantage from played matches."""
+
+    home = home_goal_rate(matches)
+    away = away_goal_rate(matches)
+    if np.isnan(home) or np.isnan(away) or away == 0:
+        return DEFAULT_HOME_FIELD_ADVANTAGE
+    return home / away
+
 def _simulate_table(
     played_df: pd.DataFrame,
     remaining: pd.DataFrame,
     rng: np.random.Generator,
     *,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     home_lambda: float | None = None,
     away_lambda: float | None = None,
 ) -> pd.DataFrame:
@@ -234,7 +244,11 @@ def _simulate_table(
 
     sims: list[dict] = []
 
-    ha = home_field_advantage
+    ha = (
+        estimate_home_field_advantage(played_df)
+        if home_field_advantage is None
+        else home_field_advantage
+    )
     if home_lambda is None or away_lambda is None:
         home_lambda = played_df["home_score"].mean()
         away_lambda = played_df["away_score"].mean()
@@ -278,7 +292,7 @@ def simulate_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -296,6 +310,9 @@ def simulate_chances(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
+
+    if home_field_advantage is None:
+        home_field_advantage = estimate_home_field_advantage(played_df)
 
     if n_jobs > 1:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
@@ -341,7 +358,7 @@ def simulate_relegation_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -357,6 +374,8 @@ def simulate_relegation_chances(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
+    if home_field_advantage is None:
+        home_field_advantage = estimate_home_field_advantage(played_df)
     if n_jobs > 1:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
         iterator = seeds
@@ -403,7 +422,7 @@ def simulate_final_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -420,6 +439,8 @@ def simulate_final_table(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
+    if home_field_advantage is None:
+        home_field_advantage = estimate_home_field_advantage(played_df)
 
     if n_jobs > 1:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
@@ -479,7 +500,7 @@ def summary_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -501,6 +522,8 @@ def summary_table(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
+    if home_field_advantage is None:
+        home_field_advantage = estimate_home_field_advantage(played_df)
 
     if n_jobs > 1:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
