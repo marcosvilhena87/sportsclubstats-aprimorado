@@ -27,12 +27,13 @@ import pandas as pd
 # Default simulation parameters
 # ---------------------------------------------------------------------------
 
-# Percent chance of a match ending in a tie when teams are of equal strength
-# Fixed at one third of matches ending level.
+# Percent chance of a match ending in a tie when teams are of equal strength.
+# The value is dynamically derived from recent seasons when the module is
+# imported.  A fallback of 33.3% is used if historical data is unavailable.
 DEFAULT_TIE_PERCENT = 33.3
 
-# Relative advantage multiplier for the home team
-# No built-in home advantage is used by default.
+# Relative advantage multiplier for the home team.  This too is recalculated
+# from past results with a default of ``1.0`` when no data can be loaded.
 DEFAULT_HOME_FIELD_ADVANTAGE = 1.0
 
 # Default number of parallel jobs. Use all available cores.
@@ -109,6 +110,40 @@ def reset_results_from(matches: pd.DataFrame, start_date: str | pd.Timestamp) ->
     mask = df["date"] >= start
     df.loc[mask, ["home_score", "away_score"]] = np.nan
     return df
+
+
+def _calculate_default_parameters() -> tuple[float, float]:
+    """Return draw percentage and home advantage from past seasons."""
+
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    seasons = [2022, 2023, 2024]
+    rates: list[float] = []
+    advantages: list[float] = []
+    for year in seasons:
+        path = data_dir / f"Brasileirao{year}A.txt"
+        if not path.exists():
+            continue
+        df = parse_matches(path)
+        played = df.dropna(subset=["home_score", "away_score"])
+        if played.empty:
+            continue
+        draws = (played["home_score"] == played["away_score"]).sum()
+        rate = draws / len(played)
+        home_wins = (played["home_score"] > played["away_score"]).sum()
+        away_wins = (played["home_score"] < played["away_score"]).sum()
+        ha = (
+            home_wins / away_wins
+            if away_wins
+            else DEFAULT_HOME_FIELD_ADVANTAGE
+        )
+        rates.append(rate)
+        advantages.append(ha)
+    if rates and advantages:
+        return float(np.mean(rates)) * 100.0, float(np.mean(advantages))
+    return DEFAULT_TIE_PERCENT, DEFAULT_HOME_FIELD_ADVANTAGE
+
+
+DEFAULT_TIE_PERCENT, DEFAULT_HOME_FIELD_ADVANTAGE = _calculate_default_parameters()
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +248,7 @@ def _simulate_table(
     rng: np.random.Generator,
     *,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
 ) -> pd.DataFrame:
     """Simulate remaining fixtures with fixed home advantage."""
 
@@ -220,7 +256,7 @@ def _simulate_table(
 
     for _, row in remaining.iterrows():
         tp = tie_prob
-        ha = DEFAULT_HOME_FIELD_ADVANTAGE
+        ha = home_field_advantage
         rest = 1.0 - tp
         home_prob = rest * ha / (ha + 1)
         draw_prob = tp
@@ -256,6 +292,7 @@ def simulate_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -286,6 +323,7 @@ def simulate_chances(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -301,6 +339,7 @@ def simulate_chances(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             champs[table.iloc[0]["team"]] += 1
 
@@ -316,6 +355,7 @@ def simulate_relegation_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -343,6 +383,7 @@ def simulate_relegation_chances(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -359,6 +400,7 @@ def simulate_relegation_chances(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             for team in table.tail(4)["team"]:
                 relegated[team] += 1
@@ -375,6 +417,7 @@ def simulate_final_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -404,6 +447,7 @@ def simulate_final_table(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -421,6 +465,7 @@ def simulate_final_table(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             for idx, row in table.iterrows():
                 pos_totals[row["team"]] += idx + 1
@@ -448,6 +493,7 @@ def summary_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -482,6 +528,7 @@ def summary_table(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -502,6 +549,7 @@ def summary_table(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             title_counts[table.iloc[0]["team"]] += 1
             for team in table.tail(4)["team"]:

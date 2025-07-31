@@ -23,9 +23,12 @@ directory as `main.py`. Pass `--html-output <file>` to choose a custom path.
 Use `--from-date YYYY-MM-DD` to ignore results on or after a given date and
 simulate from that point forward.
 
-The draw rate and home-field advantage are fixed at
-`DEFAULT_TIE_PERCENT` (33.3) and `DEFAULT_HOME_FIELD_ADVANTAGE` (1.0).
-`DEFAULT_JOBS` still defines the parallelism level.
+The draw rate and home-field advantage default to values computed from the
+previous three Brasileir\u00e3o seasons.  For the included data this yields
+`DEFAULT_TIE_PERCENT` (about 26.9) and `DEFAULT_HOME_FIELD_ADVANTAGE`
+(around 1.7).  Use the ``--tie-percent`` and ``--home-advantage`` options to
+override these parameters. ``DEFAULT_JOBS`` still defines the parallelism
+level.
 
 Matches are simulated purely at random with all teams considered equal.
 
@@ -68,8 +71,9 @@ from simulator import (
 All simulation functions accept an optional ``n_jobs`` argument to control the
 degree of parallelism. By default ``n_jobs`` is set to the number of CPU cores,
 so simulations automatically run in parallel. When ``n_jobs`` is greater than
-one, joblib is used to distribute the work across multiple workers. The tie
-percentage and home advantage are fixed at their defaults of 33.3% and 1.0.
+one, joblib is used to distribute the work across multiple workers. By default
+the tie percentage and home advantage are taken from historical results but can
+be overridden via ``--tie-percent`` and ``--home-advantage``.
 
 ## License
 
