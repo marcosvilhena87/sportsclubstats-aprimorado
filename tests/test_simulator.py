@@ -298,4 +298,44 @@ def test_simulate_table_uses_poisson(monkeypatch):
     assert rng.called[1] == pytest.approx(0.5)
 
 
+def test_simulate_table_dynamic_home_advantage():
+    played = pd.DataFrame(
+        [
+            {"date": "2025-01-01", "home_team": "A", "away_team": "B", "home_score": 2, "away_score": 1}
+        ]
+    )
+    remaining = pd.DataFrame([
+        {"date": "2025-02-01", "home_team": "A", "away_team": "B"}
+    ])
+
+    class DummyRNG:
+        def __init__(self):
+            self.called = []
+            self.poisson_vals = [0, 1]
+            self.idx = 0
+
+        def poisson(self, lam, size=None):
+            self.called.append(lam)
+            val = self.poisson_vals[self.idx % len(self.poisson_vals)]
+            self.idx += 1
+            return val if size is None else np.full(size, val, dtype=int)
+
+        def random(self):
+            return 0.5
+
+    rng = DummyRNG()
+
+    simulator._simulate_table(
+        played,
+        remaining,
+        rng,
+        home_field_advantage=None,
+        home_lambda=1.0,
+        away_lambda=0.5,
+    )
+    # home advantage should be estimated as home goals / away goals = 2 / 1 = 2
+    assert rng.called[0] == pytest.approx(1.0 * 2.0)
+    assert rng.called[1] == pytest.approx(0.5)
+
+
 
