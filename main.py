@@ -66,6 +66,12 @@ def main() -> None:
         default=DEFAULT_HOME_FIELD_ADVANTAGE,
         help="multiplier for home team goal rate",
     )
+    parser.add_argument(
+        "--tie-percent",
+        type=float,
+        default=DEFAULT_TIE_PERCENT,
+        help="percent chance of a match ending in a draw",
+    )
     args = parser.parse_args()
 
     matches = parse_matches(args.file)
@@ -73,8 +79,8 @@ def main() -> None:
         from_date = pd.to_datetime(args.from_date)
         matches.loc[matches["date"] >= from_date, ["home_score", "away_score"]] = np.nan
     rng = np.random.default_rng(args.seed) if args.seed is not None else None
-    # Fixed simulation parameters
-    tie_prob = DEFAULT_TIE_PERCENT / 100.0
+    # Convert tie percent option into probability
+    tie_prob = args.tie_percent / 100.0
 
     summary = summary_table(
         matches,
