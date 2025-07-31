@@ -17,6 +17,7 @@ from simulator import (
     summary_table,
     DEFAULT_JOBS,
     DEFAULT_TIE_PERCENT,
+    DEFAULT_HOME_FIELD_ADVANTAGE,
 )
 
 
@@ -59,6 +60,12 @@ def main() -> None:
         default=os.path.join(os.path.dirname(__file__), "brasileirao.html"),
         help="path to save summary table as HTML",
     )
+    parser.add_argument(
+        "--home-advantage",
+        type=float,
+        default=DEFAULT_HOME_FIELD_ADVANTAGE,
+        help="multiplier for home team goal rate",
+    )
     args = parser.parse_args()
 
     matches = parse_matches(args.file)
@@ -75,6 +82,7 @@ def main() -> None:
         rng=rng,
         progress=args.progress,
         tie_prob=tie_prob,
+        home_field_advantage=args.home_advantage,
         n_jobs=args.jobs,
     )
     if args.html_output:

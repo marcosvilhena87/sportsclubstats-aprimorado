@@ -21,13 +21,13 @@ example will execute the Monte Carlo iterations using four parallel processes.
 The summary table is automatically saved as `brasileirao.html` in the same
 directory as `main.py`. Pass `--html-output <file>` to choose a custom path.
 Use `--from-date YYYY-MM-DD` to ignore results on or after a given date and
-simulate from that point forward.
+simulate from that point forward. You can control the home team's scoring
+advantage using `--home-advantage <multiplier>` (default is
+`DEFAULT_HOME_FIELD_ADVANTAGE`). Goal rates for home and away sides are
+estimated from the played matches and scores are drawn from Poisson
+distributions.
 
-The draw rate and home-field advantage are fixed at
-`DEFAULT_TIE_PERCENT` (33.3) and `DEFAULT_HOME_FIELD_ADVANTAGE` (1.0).
 `DEFAULT_JOBS` still defines the parallelism level.
-
-Matches are simulated purely at random with all teams considered equal.
 
 The script outputs the estimated chance of winning the title for each team. It then prints the probability of each side finishing in the bottom four and being relegated. It also estimates the average final position and points of every club.
 All of these metrics are derived from a single Monte Carlo loop so that title chances, relegation odds and projected points remain consistent.

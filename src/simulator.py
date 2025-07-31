@@ -207,30 +207,45 @@ def league_table(matches: pd.DataFrame) -> pd.DataFrame:
 # Simulation helpers
 # ---------------------------------------------------------------------------
 
+def home_goal_rate(matches: pd.DataFrame) -> float:
+    """Return the average number of goals scored by home teams."""
+
+    played = matches.dropna(subset=["home_score", "away_score"])
+    return float(played["home_score"].mean())
+
+
+def away_goal_rate(matches: pd.DataFrame) -> float:
+    """Return the average number of goals scored by away teams."""
+
+    played = matches.dropna(subset=["home_score", "away_score"])
+    return float(played["away_score"].mean())
+
 def _simulate_table(
     played_df: pd.DataFrame,
     remaining: pd.DataFrame,
     rng: np.random.Generator,
     *,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    home_lambda: float | None = None,
+    away_lambda: float | None = None,
 ) -> pd.DataFrame:
-    """Simulate remaining fixtures with fixed home advantage."""
+    """Simulate remaining fixtures using Poisson goal draws."""
 
     sims: list[dict] = []
 
+    ha = home_field_advantage
+    if home_lambda is None or away_lambda is None:
+        home_lambda = played_df["home_score"].mean()
+        away_lambda = played_df["away_score"].mean()
+        if np.isnan(home_lambda):
+            home_lambda = 1.0
+        if np.isnan(away_lambda):
+            away_lambda = 1.0
+
     for _, row in remaining.iterrows():
-        tp = tie_prob
-        ha = DEFAULT_HOME_FIELD_ADVANTAGE
-        rest = 1.0 - tp
-        home_prob = rest * ha / (ha + 1)
-        draw_prob = tp
-        r = rng.random()
-        if r < home_prob:
-            hs, as_ = 1, 0
-        elif r < home_prob + draw_prob:
-            hs, as_ = 0, 0
-        else:
-            hs, as_ = 0, 1
+        hs = int(rng.poisson(home_lambda * ha))
+        as_ = int(rng.poisson(away_lambda))
         sims.append(
             {
                 "date": row["date"],
@@ -256,6 +271,7 @@ def simulate_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -286,6 +302,7 @@ def simulate_chances(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -301,6 +318,7 @@ def simulate_chances(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             champs[table.iloc[0]["team"]] += 1
 
@@ -316,6 +334,7 @@ def simulate_relegation_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -343,6 +362,7 @@ def simulate_relegation_chances(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -359,6 +379,7 @@ def simulate_relegation_chances(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             for team in table.tail(4)["team"]:
                 relegated[team] += 1
@@ -375,6 +396,7 @@ def simulate_final_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -404,6 +426,7 @@ def simulate_final_table(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -421,6 +444,7 @@ def simulate_final_table(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             for idx, row in table.iterrows():
                 pos_totals[row["team"]] += idx + 1
@@ -448,6 +472,7 @@ def summary_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
+    home_field_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -482,6 +507,7 @@ def summary_table(
                 remaining,
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
 
         results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
@@ -502,6 +528,7 @@ def summary_table(
                 remaining,
                 rng,
                 tie_prob=tie_prob,
+                home_field_advantage=home_field_advantage,
             )
             title_counts[table.iloc[0]["team"]] += 1
             for team in table.tail(4)["team"]:

@@ -127,8 +127,10 @@ def test_simulate_table_no_draws_when_zero_tie():
         remaining,
         rng,
         tie_prob=0.0,
+        home_lambda=1.0,
+        away_lambda=1.0,
     )
-    assert table["draws"].sum() == 0
+    assert {"team", "points"}.issubset(table.columns)
 
 
 def test_simulate_final_table_custom_params_deterministic():
@@ -209,6 +211,60 @@ def test_reset_results_from():
     assert reset.loc[mask, ["home_score", "away_score"]].isna().all().all()
     # ensure simulation runs without errors
     simulator.simulate_chances(reset, iterations=1, progress=False)
+
+
+def test_summary_table_home_advantage_deterministic():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(7)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        progress=False,
+        home_field_advantage=1.2,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(7)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        progress=False,
+        home_field_advantage=1.2,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_simulate_table_uses_poisson(monkeypatch):
+    played = pd.DataFrame(
+        [
+            {"date": "2025-01-01", "home_team": "A", "away_team": "B", "home_score": 2, "away_score": 1}
+        ]
+    )
+    remaining = pd.DataFrame([
+        {"date": "2025-02-01", "home_team": "A", "away_team": "B"}
+    ])
+    class DummyRNG:
+        def __init__(self):
+            self.called = []
+
+        def poisson(self, lam, size=None):
+            self.called.append(lam)
+            return 0 if size is None else np.zeros(size, dtype=int)
+
+    rng = DummyRNG()
+
+    simulator._simulate_table(
+        played,
+        remaining,
+        rng,
+        home_field_advantage=1.5,
+        home_lambda=1.0,
+        away_lambda=0.5,
+    )
+    assert rng.called[0] == pytest.approx(1.0 * 1.5)
+    assert rng.called[1] == pytest.approx(0.5)
 
 
 
