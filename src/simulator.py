@@ -244,8 +244,15 @@ def _simulate_table(
             away_lambda = 1.0
 
     for _, row in remaining.iterrows():
-        hs = int(rng.poisson(home_lambda * ha))
-        as_ = int(rng.poisson(away_lambda))
+        if rng.random() < tie_prob:
+            lam = (home_lambda * ha + away_lambda) / 2
+            g = int(rng.poisson(lam))
+            hs = as_ = g
+        else:
+            hs = as_ = 0
+            while hs == as_:
+                hs = int(rng.poisson(home_lambda * ha))
+                as_ = int(rng.poisson(away_lambda))
         sims.append(
             {
                 "date": row["date"],
