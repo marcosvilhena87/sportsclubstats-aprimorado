@@ -21,14 +21,13 @@ example will execute the Monte Carlo iterations using four parallel processes.
 The summary table is automatically saved as `brasileirao.html` in the same
 directory as `main.py`. Pass `--html-output <file>` to choose a custom path.
 Use `--from-date YYYY-MM-DD` to ignore results on or after a given date and
-simulate from that point forward. You can control the home team's scoring
-advantage using `--home-advantage <multiplier>` (default is
-`DEFAULT_HOME_FIELD_ADVANTAGE`). Goal rates for home and away sides are
-estimated from the played matches and scores are drawn from Poisson
-distributions. The default chance of a draw is 33.3%% but can be adjusted with
-`--tie-percent <value>`.
+simulate from that point forward.
 
+The draw rate and home-field advantage are fixed at
+`DEFAULT_TIE_PERCENT` (33.3) and `DEFAULT_HOME_FIELD_ADVANTAGE` (1.0).
 `DEFAULT_JOBS` still defines the parallelism level.
+
+Matches are simulated purely at random with all teams considered equal.
 
 The script outputs the estimated chance of winning the title for each team. It then prints the probability of each side finishing in the bottom four and being relegated. It also estimates the average final position and points of every club.
 All of these metrics are derived from a single Monte Carlo loop so that title chances, relegation odds and projected points remain consistent.
@@ -69,9 +68,8 @@ from simulator import (
 All simulation functions accept an optional ``n_jobs`` argument to control the
 degree of parallelism. By default ``n_jobs`` is set to the number of CPU cores,
 so simulations automatically run in parallel. When ``n_jobs`` is greater than
-one, joblib is used to distribute the work across multiple workers. The draw
-probability defaults to 33.3%% and the home advantage to 1.0. Both can be
-overridden via ``--tie-percent`` and ``--home-advantage``.
+one, joblib is used to distribute the work across multiple workers. The tie
+percentage and home advantage are fixed at their defaults of 33.3% and 1.0.
 
 ## License
 

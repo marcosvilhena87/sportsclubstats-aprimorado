@@ -127,34 +127,8 @@ def test_simulate_table_no_draws_when_zero_tie():
         remaining,
         rng,
         tie_prob=0.0,
-        home_lambda=1.0,
-        away_lambda=1.0,
     )
     assert table["draws"].sum() == 0
-
-
-def test_simulate_table_all_draws_when_one():
-    played = pd.DataFrame(
-        [],
-        columns=["date", "home_team", "away_team", "home_score", "away_score"],
-    )
-    remaining = pd.DataFrame(
-        [
-            {"date": "2025-01-01", "home_team": "A", "away_team": "B"},
-            {"date": "2025-01-02", "home_team": "B", "away_team": "A"},
-        ]
-    )
-    rng = np.random.default_rng(4)
-    table = simulator._simulate_table(
-        played,
-        remaining,
-        rng,
-        tie_prob=1.0,
-        home_lambda=1.0,
-        away_lambda=1.0,
-    )
-    for draws in table["draws"]:
-        assert draws == 2
 
 
 def test_simulate_final_table_custom_params_deterministic():
@@ -235,107 +209,6 @@ def test_reset_results_from():
     assert reset.loc[mask, ["home_score", "away_score"]].isna().all().all()
     # ensure simulation runs without errors
     simulator.simulate_chances(reset, iterations=1, progress=False)
-
-
-def test_summary_table_home_advantage_deterministic():
-    df = parse_matches("data/Brasileirao2024A.txt")
-    rng = np.random.default_rng(7)
-    t1 = simulator.summary_table(
-        df,
-        iterations=5,
-        rng=rng,
-        progress=False,
-        home_field_advantage=1.2,
-        n_jobs=2,
-    )
-    rng = np.random.default_rng(7)
-    t2 = simulator.summary_table(
-        df,
-        iterations=5,
-        rng=rng,
-        progress=False,
-        home_field_advantage=1.2,
-        n_jobs=2,
-    )
-    pd.testing.assert_frame_equal(t1, t2)
-
-
-def test_simulate_table_uses_poisson(monkeypatch):
-    played = pd.DataFrame(
-        [
-            {"date": "2025-01-01", "home_team": "A", "away_team": "B", "home_score": 2, "away_score": 1}
-        ]
-    )
-    remaining = pd.DataFrame([
-        {"date": "2025-02-01", "home_team": "A", "away_team": "B"}
-    ])
-    class DummyRNG:
-        def __init__(self):
-            self.called = []
-            self.poisson_vals = [0, 1]
-            self.idx = 0
-
-        def poisson(self, lam, size=None):
-            self.called.append(lam)
-            val = self.poisson_vals[self.idx % len(self.poisson_vals)]
-            self.idx += 1
-            return val if size is None else np.full(size, val, dtype=int)
-
-        def random(self):
-            return 0.5
-
-    rng = DummyRNG()
-
-    simulator._simulate_table(
-        played,
-        remaining,
-        rng,
-        home_field_advantage=1.5,
-        home_lambda=1.0,
-        away_lambda=0.5,
-    )
-    assert rng.called[0] == pytest.approx(1.0 * 1.5)
-    assert rng.called[1] == pytest.approx(0.5)
-
-
-def test_simulate_table_dynamic_home_advantage():
-    played = pd.DataFrame(
-        [
-            {"date": "2025-01-01", "home_team": "A", "away_team": "B", "home_score": 2, "away_score": 1}
-        ]
-    )
-    remaining = pd.DataFrame([
-        {"date": "2025-02-01", "home_team": "A", "away_team": "B"}
-    ])
-
-    class DummyRNG:
-        def __init__(self):
-            self.called = []
-            self.poisson_vals = [0, 1]
-            self.idx = 0
-
-        def poisson(self, lam, size=None):
-            self.called.append(lam)
-            val = self.poisson_vals[self.idx % len(self.poisson_vals)]
-            self.idx += 1
-            return val if size is None else np.full(size, val, dtype=int)
-
-        def random(self):
-            return 0.5
-
-    rng = DummyRNG()
-
-    simulator._simulate_table(
-        played,
-        remaining,
-        rng,
-        home_field_advantage=None,
-        home_lambda=1.0,
-        away_lambda=0.5,
-    )
-    # home advantage should be estimated as home goals / away goals = 2 / 1 = 2
-    assert rng.called[0] == pytest.approx(1.0 * 2.0)
-    assert rng.called[1] == pytest.approx(0.5)
 
 
 

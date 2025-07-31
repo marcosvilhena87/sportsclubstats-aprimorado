@@ -207,66 +207,30 @@ def league_table(matches: pd.DataFrame) -> pd.DataFrame:
 # Simulation helpers
 # ---------------------------------------------------------------------------
 
-def home_goal_rate(matches: pd.DataFrame) -> float:
-    """Return the average number of goals scored by home teams."""
-
-    played = matches.dropna(subset=["home_score", "away_score"])
-    return float(played["home_score"].mean())
-
-
-def away_goal_rate(matches: pd.DataFrame) -> float:
-    """Return the average number of goals scored by away teams."""
-
-    played = matches.dropna(subset=["home_score", "away_score"])
-    return float(played["away_score"].mean())
-
-
-def estimate_home_field_advantage(matches: pd.DataFrame) -> float:
-    """Estimate the home field advantage from played matches."""
-
-    home = home_goal_rate(matches)
-    away = away_goal_rate(matches)
-    if np.isnan(home) or np.isnan(away) or away == 0:
-        return DEFAULT_HOME_FIELD_ADVANTAGE
-    return home / away
-
 def _simulate_table(
     played_df: pd.DataFrame,
     remaining: pd.DataFrame,
     rng: np.random.Generator,
     *,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
-    home_lambda: float | None = None,
-    away_lambda: float | None = None,
 ) -> pd.DataFrame:
-    """Simulate remaining fixtures using Poisson goal draws."""
+    """Simulate remaining fixtures with fixed home advantage."""
 
     sims: list[dict] = []
 
-    ha = (
-        estimate_home_field_advantage(played_df)
-        if home_field_advantage is None
-        else home_field_advantage
-    )
-    if home_lambda is None or away_lambda is None:
-        home_lambda = played_df["home_score"].mean()
-        away_lambda = played_df["away_score"].mean()
-        if np.isnan(home_lambda):
-            home_lambda = 1.0
-        if np.isnan(away_lambda):
-            away_lambda = 1.0
-
     for _, row in remaining.iterrows():
-        if rng.random() < tie_prob:
-            lam = (home_lambda * ha + away_lambda) / 2
-            g = int(rng.poisson(lam))
-            hs = as_ = g
+        tp = tie_prob
+        ha = DEFAULT_HOME_FIELD_ADVANTAGE
+        rest = 1.0 - tp
+        home_prob = rest * ha / (ha + 1)
+        draw_prob = tp
+        r = rng.random()
+        if r < home_prob:
+            hs, as_ = 1, 0
+        elif r < home_prob + draw_prob:
+            hs, as_ = 0, 0
         else:
-            hs = as_ = 0
-            while hs == as_:
-                hs = int(rng.poisson(home_lambda * ha))
-                as_ = int(rng.poisson(away_lambda))
+            hs, as_ = 0, 1
         sims.append(
             {
                 "date": row["date"],
@@ -278,6 +242,53 @@ def _simulate_table(
         )
     all_matches = pd.concat([played_df, pd.DataFrame(sims)], ignore_index=True)
     return league_table(all_matches)
+
+
+def _iterate_tables(
+    played_df: pd.DataFrame,
+    remaining: pd.DataFrame,
+    rng: np.random.Generator,
+    iterations: int,
+    *,
+    desc: str,
+    progress: bool,
+    tie_prob: float,
+    n_jobs: int,
+):
+    """Yield successive simulated tables.
+
+    This helper mirrors the parallel and serial execution logic used by the
+    public simulation functions to ensure deterministic ordering of results.
+    """
+
+    if n_jobs > 1:
+        seeds = rng.integers(0, 2**32 - 1, size=iterations)
+        iterator = seeds
+        if progress and tqdm is not None:
+            iterator = tqdm(iterator, desc=desc, unit="sim")
+
+        def run(seed: int) -> pd.DataFrame:
+            return _simulate_table(
+                played_df,
+                remaining,
+                np.random.default_rng(seed),
+                tie_prob=tie_prob,
+            )
+
+        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
+        for table in results:
+            yield table
+    else:
+        iterator = range(iterations)
+        if progress and tqdm is not None:
+            iterator = tqdm(iterator, desc=desc, unit="sim")
+        for _ in iterator:
+            yield _simulate_table(
+                played_df,
+                remaining,
+                rng,
+                tie_prob=tie_prob,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +303,6 @@ def simulate_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -311,40 +321,17 @@ def simulate_chances(
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
 
-    if home_field_advantage is None:
-        home_field_advantage = estimate_home_field_advantage(played_df)
-
-    if n_jobs > 1:
-        seeds = rng.integers(0, 2**32 - 1, size=iterations)
-        iterator = seeds
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Chances", unit="sim")
-
-        def run(seed: int) -> pd.DataFrame:
-            return _simulate_table(
-                played_df,
-                remaining,
-                np.random.default_rng(seed),
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-
-        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
-        for table in results:
-            champs[table.iloc[0]["team"]] += 1
-    else:
-        iterator = range(iterations)
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Chances", unit="sim")
-        for _ in iterator:
-            table = _simulate_table(
-                played_df,
-                remaining,
-                rng,
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-            champs[table.iloc[0]["team"]] += 1
+    for table in _iterate_tables(
+        played_df,
+        remaining,
+        rng,
+        iterations,
+        desc="Chances",
+        progress=progress,
+        tie_prob=tie_prob,
+        n_jobs=n_jobs,
+    ):
+        champs[table.iloc[0]["team"]] += 1
 
     for t in champs:
         champs[t] /= iterations
@@ -358,7 +345,6 @@ def simulate_relegation_chances(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -374,41 +360,18 @@ def simulate_relegation_chances(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
-    if home_field_advantage is None:
-        home_field_advantage = estimate_home_field_advantage(played_df)
-    if n_jobs > 1:
-        seeds = rng.integers(0, 2**32 - 1, size=iterations)
-        iterator = seeds
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Relegation", unit="sim")
-
-        def run(seed: int) -> pd.DataFrame:
-            return _simulate_table(
-                played_df,
-                remaining,
-                np.random.default_rng(seed),
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-
-        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
-        for table in results:
-            for team in table.tail(4)["team"]:
-                relegated[team] += 1
-    else:
-        iterator = range(iterations)
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Relegation", unit="sim")
-        for _ in iterator:
-            table = _simulate_table(
-                played_df,
-                remaining,
-                rng,
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-            for team in table.tail(4)["team"]:
-                relegated[team] += 1
+    for table in _iterate_tables(
+        played_df,
+        remaining,
+        rng,
+        iterations,
+        desc="Relegation",
+        progress=progress,
+        tie_prob=tie_prob,
+        n_jobs=n_jobs,
+    ):
+        for team in table.tail(4)["team"]:
+            relegated[team] += 1
 
     for t in relegated:
         relegated[t] /= iterations
@@ -422,7 +385,6 @@ def simulate_final_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -439,44 +401,20 @@ def simulate_final_table(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
-    if home_field_advantage is None:
-        home_field_advantage = estimate_home_field_advantage(played_df)
 
-    if n_jobs > 1:
-        seeds = rng.integers(0, 2**32 - 1, size=iterations)
-        iterator = seeds
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Final table", unit="sim")
-
-        def run(seed: int) -> pd.DataFrame:
-            return _simulate_table(
-                played_df,
-                remaining,
-                np.random.default_rng(seed),
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-
-        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
-        for table in results:
-            for idx, row in table.iterrows():
-                pos_totals[row["team"]] += idx + 1
-                points_totals[row["team"]] += row["points"]
-    else:
-        iterator = range(iterations)
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Final table", unit="sim")
-        for _ in iterator:
-            table = _simulate_table(
-                played_df,
-                remaining,
-                rng,
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-            for idx, row in table.iterrows():
-                pos_totals[row["team"]] += idx + 1
-                points_totals[row["team"]] += row["points"]
+    for table in _iterate_tables(
+        played_df,
+        remaining,
+        rng,
+        iterations,
+        desc="Final table",
+        progress=progress,
+        tie_prob=tie_prob,
+        n_jobs=n_jobs,
+    ):
+        for idx, row in table.iterrows():
+            pos_totals[row["team"]] += idx + 1
+            points_totals[row["team"]] += row["points"]
 
     results = []
     for team in teams:
@@ -500,7 +438,6 @@ def summary_table(
     rng: np.random.Generator | None = None,
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
-    home_field_advantage: float | None = DEFAULT_HOME_FIELD_ADVANTAGE,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -522,49 +459,22 @@ def summary_table(
     remaining = matches[
         matches["home_score"].isna() | matches["away_score"].isna()
     ]
-    if home_field_advantage is None:
-        home_field_advantage = estimate_home_field_advantage(played_df)
 
-    if n_jobs > 1:
-        seeds = rng.integers(0, 2**32 - 1, size=iterations)
-        iterator = seeds
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Summary", unit="sim")
-
-        def run(seed: int) -> pd.DataFrame:
-            return _simulate_table(
-                played_df,
-                remaining,
-                np.random.default_rng(seed),
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-
-        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
-        for table in results:
-            title_counts[table.iloc[0]["team"]] += 1
-            for team in table.tail(4)["team"]:
-                relegated[team] += 1
-            for _, row in table.iterrows():
-                points_totals[row["team"]] += row["points"]
-    else:
-        iterator = range(iterations)
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc="Summary", unit="sim")
-
-        for _ in iterator:
-            table = _simulate_table(
-                played_df,
-                remaining,
-                rng,
-                tie_prob=tie_prob,
-                home_field_advantage=home_field_advantage,
-            )
-            title_counts[table.iloc[0]["team"]] += 1
-            for team in table.tail(4)["team"]:
-                relegated[team] += 1
-            for _, row in table.iterrows():
-                points_totals[row["team"]] += row["points"]
+    for table in _iterate_tables(
+        played_df,
+        remaining,
+        rng,
+        iterations,
+        desc="Summary",
+        progress=progress,
+        tie_prob=tie_prob,
+        n_jobs=n_jobs,
+    ):
+        title_counts[table.iloc[0]["team"]] += 1
+        for team in table.tail(4)["team"]:
+            relegated[team] += 1
+        for _, row in table.iterrows():
+            points_totals[row["team"]] += row["points"]
 
     rows = []
     for team in teams:

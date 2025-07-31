@@ -17,7 +17,6 @@ from simulator import (
     summary_table,
     DEFAULT_JOBS,
     DEFAULT_TIE_PERCENT,
-    DEFAULT_HOME_FIELD_ADVANTAGE,
 )
 
 
@@ -60,18 +59,6 @@ def main() -> None:
         default=os.path.join(os.path.dirname(__file__), "brasileirao.html"),
         help="path to save summary table as HTML",
     )
-    parser.add_argument(
-        "--home-advantage",
-        type=float,
-        default=DEFAULT_HOME_FIELD_ADVANTAGE,
-        help="multiplier for home team goal rate",
-    )
-    parser.add_argument(
-        "--tie-percent",
-        type=float,
-        default=DEFAULT_TIE_PERCENT,
-        help="percent chance of a match ending in a draw",
-    )
     args = parser.parse_args()
 
     matches = parse_matches(args.file)
@@ -79,8 +66,8 @@ def main() -> None:
         from_date = pd.to_datetime(args.from_date)
         matches.loc[matches["date"] >= from_date, ["home_score", "away_score"]] = np.nan
     rng = np.random.default_rng(args.seed) if args.seed is not None else None
-    # Convert tie percent option into probability
-    tie_prob = args.tie_percent / 100.0
+    # Fixed simulation parameters
+    tie_prob = DEFAULT_TIE_PERCENT / 100.0
 
     summary = summary_table(
         matches,
@@ -88,7 +75,6 @@ def main() -> None:
         rng=rng,
         progress=args.progress,
         tie_prob=tie_prob,
-        home_field_advantage=args.home_advantage,
         n_jobs=args.jobs,
     )
     if args.html_output:
