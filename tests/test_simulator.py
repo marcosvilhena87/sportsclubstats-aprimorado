@@ -130,7 +130,31 @@ def test_simulate_table_no_draws_when_zero_tie():
         home_lambda=1.0,
         away_lambda=1.0,
     )
-    assert {"team", "points"}.issubset(table.columns)
+    assert table["draws"].sum() == 0
+
+
+def test_simulate_table_all_draws_when_one():
+    played = pd.DataFrame(
+        [],
+        columns=["date", "home_team", "away_team", "home_score", "away_score"],
+    )
+    remaining = pd.DataFrame(
+        [
+            {"date": "2025-01-01", "home_team": "A", "away_team": "B"},
+            {"date": "2025-01-02", "home_team": "B", "away_team": "A"},
+        ]
+    )
+    rng = np.random.default_rng(4)
+    table = simulator._simulate_table(
+        played,
+        remaining,
+        rng,
+        tie_prob=1.0,
+        home_lambda=1.0,
+        away_lambda=1.0,
+    )
+    for draws in table["draws"]:
+        assert draws == 2
 
 
 def test_simulate_final_table_custom_params_deterministic():
@@ -248,10 +272,17 @@ def test_simulate_table_uses_poisson(monkeypatch):
     class DummyRNG:
         def __init__(self):
             self.called = []
+            self.poisson_vals = [0, 1]
+            self.idx = 0
 
         def poisson(self, lam, size=None):
             self.called.append(lam)
-            return 0 if size is None else np.zeros(size, dtype=int)
+            val = self.poisson_vals[self.idx % len(self.poisson_vals)]
+            self.idx += 1
+            return val if size is None else np.full(size, val, dtype=int)
+
+        def random(self):
+            return 0.5
 
     rng = DummyRNG()
 
