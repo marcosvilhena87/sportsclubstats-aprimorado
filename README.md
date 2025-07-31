@@ -25,7 +25,8 @@ simulate from that point forward. You can control the home team's scoring
 advantage using `--home-advantage <multiplier>` (default is
 `DEFAULT_HOME_FIELD_ADVANTAGE`). Goal rates for home and away sides are
 estimated from the played matches and scores are drawn from Poisson
-distributions.
+distributions. The default chance of a draw is 33.3%% but can be adjusted with
+`--tie-percent <value>`.
 
 `DEFAULT_JOBS` still defines the parallelism level.
 
@@ -68,8 +69,9 @@ from simulator import (
 All simulation functions accept an optional ``n_jobs`` argument to control the
 degree of parallelism. By default ``n_jobs`` is set to the number of CPU cores,
 so simulations automatically run in parallel. When ``n_jobs`` is greater than
-one, joblib is used to distribute the work across multiple workers. The tie
-percentage and home advantage are fixed at their defaults of 33.3% and 1.0.
+one, joblib is used to distribute the work across multiple workers. The draw
+probability defaults to 33.3%% and the home advantage to 1.0. Both can be
+overridden via ``--tie-percent`` and ``--home-advantage``.
 
 ## License
 
