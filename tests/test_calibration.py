@@ -1,6 +1,8 @@
 import sys, os; sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from calibration import estimate_parameters, estimate_team_strengths
+import sys, os; sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
+from calibration import estimate_parameters, estimate_team_strengths, estimate_goal_means
 
 
 def test_estimate_parameters_repeatable():
@@ -23,4 +25,19 @@ def test_estimate_team_strengths_repeatable():
     assert len(strengths) == 20
     assert round(strengths["Palmeiras"][0], 4) == 1.2917
     assert round(strengths["Fluminense"][1], 4) == 0.8396
+
+
+def test_estimate_goal_means_repeatable():
+    hm, am = estimate_goal_means(["data/Brasileirao2024A.txt"])
+    assert round(hm, 4) == 1.4105
+    assert round(am, 4) == 1.0342
+
+
+def test_estimate_goal_means_multiple_files_repeatable():
+    hm, am = estimate_goal_means([
+        "data/Brasileirao2023A.txt",
+        "data/Brasileirao2024A.txt",
+    ])
+    assert round(hm, 4) == 1.4145
+    assert round(am, 4) == 1.0526
 
