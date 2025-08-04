@@ -357,7 +357,23 @@ def _iterate_tables(
     public simulation functions to ensure deterministic ordering of results.
     """
 
-    if n_jobs > 1:
+    if n_jobs == 1:
+        iterator = range(iterations)
+        if progress and tqdm is not None:
+            iterator = tqdm(iterator, desc=desc, unit="sim")
+        for _ in iterator:
+            yield _simulate_table(
+                played_df,
+                remaining,
+                rng,
+                tie_prob=tie_prob,
+                home_advantage=home_advantage,
+                team_params=team_params,
+                home_goals_mean=home_goals_mean,
+                away_goals_mean=away_goals_mean,
+                rho=rho,
+            )
+    else:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
         pbar = None
         if progress and tqdm is not None:
@@ -385,22 +401,6 @@ def _iterate_tables(
                 yield table
         if pbar is not None and hasattr(pbar, "close"):
             pbar.close()
-    else:
-        iterator = range(iterations)
-        if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc=desc, unit="sim")
-        for _ in iterator:
-            yield _simulate_table(
-                played_df,
-                remaining,
-                rng,
-                tie_prob=tie_prob,
-                home_advantage=home_advantage,
-                team_params=team_params,
-                home_goals_mean=home_goals_mean,
-                away_goals_mean=away_goals_mean,
-                rho=rho,
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +425,9 @@ def simulate_chances(
     """Return title probabilities.
 
     """
+
+    if n_jobs <= 0:
+        raise ValueError("n_jobs must be greater than 0")
 
     if iterations <= 0:
         raise ValueError("iterations must be greater than 0")
@@ -479,6 +482,9 @@ def simulate_relegation_chances(
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
 
+    if n_jobs <= 0:
+        raise ValueError("n_jobs must be greater than 0")
+
     if iterations <= 0:
         raise ValueError("iterations must be greater than 0")
 
@@ -531,6 +537,9 @@ def simulate_final_table(
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
+
+    if n_jobs <= 0:
+        raise ValueError("n_jobs must be greater than 0")
 
     if iterations <= 0:
         raise ValueError("iterations must be greater than 0")
@@ -601,6 +610,9 @@ def summary_table(
     The ``position`` column corresponds to the rank after sorting by the
     expected point totals.
     """
+
+    if n_jobs <= 0:
+        raise ValueError("n_jobs must be greater than 0")
 
     if iterations <= 0:
         raise ValueError("iterations must be greater than 0")
