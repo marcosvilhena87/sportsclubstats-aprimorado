@@ -13,6 +13,20 @@ def test_parse_matches():
     assert {'home_team', 'away_team', 'home_score', 'away_score'}.issubset(df.columns)
 
 
+def test_parse_matches_missing_begin(tmp_path):
+    p = tmp_path / "matches.txt"
+    p.write_text("Some header\nGamesEnd\n")
+    with pytest.raises(ValueError):
+        parse_matches(p)
+
+
+def test_parse_matches_missing_end(tmp_path):
+    p = tmp_path / "matches.txt"
+    p.write_text("GamesBegin\n")
+    with pytest.raises(ValueError):
+        parse_matches(p)
+
+
 def test_league_table():
     df = parse_matches('data/Brasileirao2024A.txt')
     table = league_table(df)
