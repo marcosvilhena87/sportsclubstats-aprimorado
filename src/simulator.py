@@ -160,52 +160,50 @@ def _head_to_head_points(
 def league_table(matches: pd.DataFrame) -> pd.DataFrame:
     """Compute league standings from played matches."""
     teams = pd.unique(matches[["home_team", "away_team"]].values.ravel())
-    table: Dict[str, Dict[str, float]] = {
-        t: {
-            "team": t,
-            "played": 0,
-            "wins": 0,
-            "draws": 0,
-            "losses": 0,
-            "gf": 0,
-            "ga": 0,
-        }
-        for t in teams
-    }
-
     played = matches.dropna(subset=["home_score", "away_score"])
-    for _, row in played.iterrows():
-        home = row["home_team"]
-        away = row["away_team"]
-        hs = int(row["home_score"])
-        as_ = int(row["away_score"])
-        table[home]["played"] += 1
-        table[away]["played"] += 1
-        table[home]["gf"] += hs
-        table[home]["ga"] += as_
-        table[away]["gf"] += as_
-        table[away]["ga"] += hs
-        if hs > as_:
-            table[home]["wins"] += 1
-            table[home]["points"] = table[home].get("points", 0) + 3
-            table[away]["losses"] += 1
-            table[away].setdefault("points", 0)
-        elif hs < as_:
-            table[away]["wins"] += 1
-            table[away]["points"] = table[away].get("points", 0) + 3
-            table[home]["losses"] += 1
-            table[home].setdefault("points", 0)
-        else:
-            table[home]["draws"] += 1
-            table[away]["draws"] += 1
-            table[home]["points"] = table[home].get("points", 0) + 1
-            table[away]["points"] = table[away].get("points", 0) + 1
 
-    for t in table.values():
-        t.setdefault("points", 0)
-        t["gd"] = t["gf"] - t["ga"]
+    if played.empty:
+        df = pd.DataFrame(
+            {
+                "team": teams,
+                "played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "gf": 0,
+                "ga": 0,
+                "points": 0,
+                "gd": 0,
+            }
+        )
+    else:
+        home = played[["home_team", "home_score", "away_score"]].rename(
+            columns={"home_team": "team", "home_score": "gf", "away_score": "ga"}
+        )
+        away = played[["away_team", "away_score", "home_score"]].rename(
+            columns={"away_team": "team", "away_score": "gf", "home_score": "ga"}
+        )
+        for df_part in (home, away):
+            df_part["wins"] = (df_part["gf"] > df_part["ga"]).astype(int)
+            df_part["draws"] = (df_part["gf"] == df_part["ga"]).astype(int)
+            df_part["losses"] = (df_part["gf"] < df_part["ga"]).astype(int)
 
-    df = pd.DataFrame(table.values())
+        stats = (
+            pd.concat([home, away], ignore_index=True)
+            .groupby("team", sort=False)
+            .agg(
+                played=("wins", "size"),
+                wins=("wins", "sum"),
+                draws=("draws", "sum"),
+                losses=("losses", "sum"),
+                gf=("gf", "sum"),
+                ga=("ga", "sum"),
+            )
+        ).astype(int)
+
+        stats["points"] = stats["wins"] * 3 + stats["draws"]
+        stats["gd"] = stats["gf"] - stats["ga"]
+        df = stats.reindex(teams, fill_value=0).reset_index().rename(columns={"index": "team"})
     df["head_to_head"] = 0
     for _, group in df.groupby(["points", "wins", "gd", "gf"]):
         if len(group) <= 1:
