@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pytest
 from simulator import parse_matches, league_table, simulate_chances
+from calibration import estimate_team_strengths
 import simulator
 
 
@@ -95,7 +96,15 @@ def test_summary_table_deterministic():
         df, iterations=5, rng=rng, progress=False, n_jobs=2
     )
     pd.testing.assert_frame_equal(table1, table2)
-    assert {"position", "team", "points", "title", "relegation"}.issubset(table1.columns)
+    assert {
+        "position",
+        "team",
+        "points",
+        "wins",
+        "gd",
+        "title",
+        "relegation",
+    }.issubset(table1.columns)
 
 
 def test_league_table_tiebreakers():
@@ -129,6 +138,43 @@ def test_simulate_table_no_draws_when_zero_tie():
         tie_prob=0.0,
     )
     assert table["draws"].sum() == 0
+
+
+def _minimal_matches():
+    played = pd.DataFrame(
+        [],
+        columns=["date", "home_team", "away_team", "home_score", "away_score"],
+    )
+    remaining = pd.DataFrame(
+        [{"date": "2025-01-01", "home_team": "A", "away_team": "B"}]
+    )
+    return played, remaining
+
+
+def test_simulate_table_invalid_tie_prob():
+    played, remaining = _minimal_matches()
+    rng = np.random.default_rng(1)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, tie_prob=-0.1)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, tie_prob=1.1)
+
+
+def test_simulate_table_invalid_home_advantage():
+    played, remaining = _minimal_matches()
+    rng = np.random.default_rng(2)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, home_advantage=0)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, home_advantage=-1)
+
+
+def test_simulate_chances_invalid_params():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    with pytest.raises(ValueError):
+        simulator.simulate_chances(df, iterations=1, tie_prob=2.0, progress=False)
+    with pytest.raises(ValueError):
+        simulator.simulate_chances(df, iterations=1, home_advantage=0, progress=False)
 
 
 def test_simulate_final_table_custom_params_deterministic():
@@ -236,6 +282,116 @@ def test_reset_results_from():
     assert reset.loc[mask, ["home_score", "away_score"]].isna().all().all()
     # ensure simulation runs without errors
     simulator.simulate_chances(reset, iterations=1, progress=False)
+
+
+def test_summary_table_after_reset_deterministic():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    df = simulator.reset_results_from(df, "2024-07-01")
+    rng = np.random.default_rng(7)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.22,
+        home_advantage=1.2,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(7)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.22,
+        home_advantage=1.2,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_summary_table_after_reset_other_params_deterministic():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    df = simulator.reset_results_from(df, "2024-07-01")
+    rng = np.random.default_rng(8)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.3,
+        home_advantage=1.5,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(8)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        tie_prob=0.3,
+        home_advantage=1.5,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_team_params_repeatable():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    params = estimate_team_strengths(["data/Brasileirao2024A.txt"])
+    rng = np.random.default_rng(100)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        team_params=params,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(100)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        team_params=params,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_poisson_mode_repeatable():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(555)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.5,
+        away_goals_mean=1.2,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(555)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.5,
+        away_goals_mean=1.2,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_simulate_table_invalid_goal_means():
+    played, remaining = _minimal_matches()
+    rng = np.random.default_rng(3)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, home_goals_mean=0)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, away_goals_mean=-1)
 
 
 

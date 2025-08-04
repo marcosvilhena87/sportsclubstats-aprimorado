@@ -4,6 +4,7 @@
 
 import os
 import sys
+import glob
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -63,6 +64,18 @@ def main() -> None:
         help="relative advantage multiplier for the home team",
     )
     parser.add_argument(
+        "--home-goals-mean",
+        type=float,
+        default=None,
+        help="expected goals for the home side when using Poisson scoring",
+    )
+    parser.add_argument(
+        "--away-goals-mean",
+        type=float,
+        default=None,
+        help="expected goals for the away side when using Poisson scoring",
+    )
+    parser.add_argument(
         "--auto-calibrate",
         action="store_true",
         help="estimate parameters from past seasons",
@@ -81,10 +94,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.auto_calibrate:
+        pattern = os.path.join("data", "Brasileirao????A.txt")
+        season_files = sorted(glob.glob(pattern))
         season_files = [
-            "data/Brasileirao2022A.txt",
-            "data/Brasileirao2023A.txt",
-            "data/Brasileirao2024A.txt",
+            f for f in season_files if os.path.abspath(f) != os.path.abspath(args.file)
         ]
         args.tie_percent, args.home_advantage = estimate_parameters(season_files)
 
@@ -103,6 +116,8 @@ def main() -> None:
         progress=args.progress,
         tie_prob=tie_prob,
         home_advantage=home_adv,
+        home_goals_mean=args.home_goals_mean,
+        away_goals_mean=args.away_goals_mean,
         n_jobs=args.jobs,
     )
     if args.html_output:
@@ -110,17 +125,18 @@ def main() -> None:
 
     TITLE_W = 7
     REL_W = 10
-    POINTS_W = len("Pontos Esperados")
+    POINTS_W = len("xPts")
+    WINS_W = len("xWins")
+    GD_W = len("xGD")
     print(
-        f"{'Pos':>3}  {'Team':15s} {'Pontos Esperados':^{POINTS_W}} {'Title':^{TITLE_W}} {'Relegation':^{REL_W}}"
+        f"{'Pos':>3}  {'Team':15s} {'xPts':^{POINTS_W}} {'xWins':^{WINS_W}} {'xGD':^{GD_W}} {'Title':^{TITLE_W}} {'Relegation':^{REL_W}}"
     )
     for _, row in summary.iterrows():
         title = f"{row['title']:.2%}"
         releg = f"{row['relegation']:.2%}"
         print(
-            f"{row['position']:>2d}   {row['team']:15s} {row['points']:^{POINTS_W}d} {title:^{TITLE_W}} {releg:^{REL_W}}"
+            f"{row['position']:>2d}   {row['team']:15s} {row['points']:^{POINTS_W}d} {row['wins']:^{WINS_W}d} {row['gd']:^{GD_W}d} {title:^{TITLE_W}} {releg:^{REL_W}}"
         )
-
 
 if __name__ == "__main__":
     main()

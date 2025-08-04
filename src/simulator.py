@@ -38,6 +38,11 @@ DEFAULT_HOME_FIELD_ADVANTAGE = 1.0
 # Default number of parallel jobs. Use all available cores.
 DEFAULT_JOBS = os.cpu_count() or 1
 
+# Number of simulations to execute per parallel batch when running with
+# ``n_jobs`` greater than one. Smaller batches keep memory usage low while
+# ensuring deterministic ordering of results.
+_BATCH_SIZE = 100
+
 
 
 # ---------------------------------------------------------------------------
@@ -214,24 +219,59 @@ def _simulate_table(
     *,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
     home_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    team_params: Dict[str, tuple[float, float]] | None = None,
+    home_goals_mean: float | None = None,
+    away_goals_mean: float | None = None,
 ) -> pd.DataFrame:
-    """Simulate remaining fixtures with fixed home advantage."""
+    """Simulate remaining fixtures.
+
+    When ``home_goals_mean`` or ``away_goals_mean`` is provided the match
+    scores are sampled from Poisson distributions with the given means scaled by
+    ``home_advantage`` and any ``team_params``. Otherwise the classic
+    win/draw/loss model based on ``tie_prob`` is used.
+    """
+
+    if not 0.0 <= tie_prob <= 1.0:
+        raise ValueError("tie_prob must be between 0 and 1")
+    if home_advantage <= 0:
+        raise ValueError("home_advantage must be greater than zero")
+
+    if home_goals_mean is not None and home_goals_mean <= 0:
+        raise ValueError("home_goals_mean must be greater than zero")
+    if away_goals_mean is not None and away_goals_mean <= 0:
+        raise ValueError("away_goals_mean must be greater than zero")
 
     sims: list[dict] = []
 
     for _, row in remaining.iterrows():
         tp = tie_prob
         ha = home_advantage
-        rest = 1.0 - tp
-        home_prob = rest * ha / (ha + 1)
-        draw_prob = tp
-        r = rng.random()
-        if r < home_prob:
-            hs, as_ = 1, 0
-        elif r < home_prob + draw_prob:
-            hs, as_ = 0, 0
+        if team_params is not None:
+            ha *= team_params.get(row["home_team"], (1.0, 1.0))[0] / team_params.get(row["away_team"], (1.0, 1.0))[1]
+            away_factor = team_params.get(row["away_team"], (1.0, 1.0))[0] / team_params.get(row["home_team"], (1.0, 1.0))[1]
         else:
-            hs, as_ = 0, 1
+            away_factor = 1.0
+
+        if home_goals_mean is not None or away_goals_mean is not None:
+            hm = home_goals_mean if home_goals_mean is not None else 1.0
+            am = away_goals_mean if away_goals_mean is not None else 1.0
+            hm *= ha
+            am *= away_factor
+            hs = int(rng.poisson(hm))
+            as_ = int(rng.poisson(am))
+        else:
+            rest = 1.0 - tp
+            strength_sum = ha + away_factor
+            home_prob = rest * ha / strength_sum
+            draw_prob = tp
+            r = rng.random()
+            if r < home_prob:
+                hs, as_ = 1, 0
+            elif r < home_prob + draw_prob:
+                hs, as_ = 0, 0
+            else:
+                hs, as_ = 0, 1
+
         sims.append(
             {
                 "date": row["date"],
@@ -255,6 +295,9 @@ def _iterate_tables(
     progress: bool,
     tie_prob: float,
     home_advantage: float,
+    team_params: Dict[str, tuple[float, float]] | None,
+    home_goals_mean: float | None,
+    away_goals_mean: float | None,
     n_jobs: int,
 ):
     """Yield successive simulated tables.
@@ -265,9 +308,9 @@ def _iterate_tables(
 
     if n_jobs > 1:
         seeds = rng.integers(0, 2**32 - 1, size=iterations)
-        iterator = seeds
+        pbar = None
         if progress and tqdm is not None:
-            iterator = tqdm(iterator, desc=desc, unit="sim")
+            pbar = tqdm(seeds, desc=desc, unit="sim")
 
         def run(seed: int) -> pd.DataFrame:
             return _simulate_table(
@@ -276,11 +319,20 @@ def _iterate_tables(
                 np.random.default_rng(seed),
                 tie_prob=tie_prob,
                 home_advantage=home_advantage,
+                team_params=team_params,
+                home_goals_mean=home_goals_mean,
+                away_goals_mean=away_goals_mean,
             )
 
-        results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in iterator)
-        for table in results:
-            yield table
+        for start in range(0, iterations, _BATCH_SIZE):
+            batch = seeds[start : start + _BATCH_SIZE]
+            results = Parallel(n_jobs=n_jobs)(delayed(run)(s) for s in batch)
+            if pbar is not None and hasattr(pbar, "update"):
+                pbar.update(len(batch))
+            for table in results:
+                yield table
+        if pbar is not None and hasattr(pbar, "close"):
+            pbar.close()
     else:
         iterator = range(iterations)
         if progress and tqdm is not None:
@@ -292,6 +344,9 @@ def _iterate_tables(
                 rng,
                 tie_prob=tie_prob,
                 home_advantage=home_advantage,
+                team_params=team_params,
+                home_goals_mean=home_goals_mean,
+                away_goals_mean=away_goals_mean,
             )
 
 
@@ -308,6 +363,9 @@ def simulate_chances(
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
     home_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    team_params: Dict[str, tuple[float, float]] | None = None,
+    home_goals_mean: float | None = None,
+    away_goals_mean: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -335,6 +393,9 @@ def simulate_chances(
         progress=progress,
         tie_prob=tie_prob,
         home_advantage=home_advantage,
+        team_params=team_params,
+        home_goals_mean=home_goals_mean,
+        away_goals_mean=away_goals_mean,
         n_jobs=n_jobs,
     ):
         champs[table.iloc[0]["team"]] += 1
@@ -352,6 +413,9 @@ def simulate_relegation_chances(
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
     home_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    team_params: Dict[str, tuple[float, float]] | None = None,
+    home_goals_mean: float | None = None,
+    away_goals_mean: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -376,6 +440,9 @@ def simulate_relegation_chances(
         progress=progress,
         tie_prob=tie_prob,
         home_advantage=home_advantage,
+        team_params=team_params,
+        home_goals_mean=home_goals_mean,
+        away_goals_mean=away_goals_mean,
         n_jobs=n_jobs,
     ):
         for team in table.tail(4)["team"]:
@@ -394,6 +461,9 @@ def simulate_final_table(
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
     home_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    team_params: Dict[str, tuple[float, float]] | None = None,
+    home_goals_mean: float | None = None,
+    away_goals_mean: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -420,6 +490,9 @@ def simulate_final_table(
         progress=progress,
         tie_prob=tie_prob,
         home_advantage=home_advantage,
+        team_params=team_params,
+        home_goals_mean=home_goals_mean,
+        away_goals_mean=away_goals_mean,
         n_jobs=n_jobs,
     ):
         for idx, row in table.iterrows():
@@ -449,6 +522,9 @@ def summary_table(
     progress: bool = True,
     tie_prob: float = DEFAULT_TIE_PERCENT / 100.0,
     home_advantage: float = DEFAULT_HOME_FIELD_ADVANTAGE,
+    team_params: Dict[str, tuple[float, float]] | None = None,
+    home_goals_mean: float | None = None,
+    away_goals_mean: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -465,6 +541,8 @@ def summary_table(
     title_counts = {t: 0 for t in teams}
     relegated = {t: 0 for t in teams}
     points_totals = {t: 0.0 for t in teams}
+    wins_totals = {t: 0.0 for t in teams}
+    gd_totals = {t: 0.0 for t in teams}
 
     played_df = matches.dropna(subset=["home_score", "away_score"])
     remaining = matches[
@@ -480,6 +558,9 @@ def summary_table(
         progress=progress,
         tie_prob=tie_prob,
         home_advantage=home_advantage,
+        team_params=team_params,
+        home_goals_mean=home_goals_mean,
+        away_goals_mean=away_goals_mean,
         n_jobs=n_jobs,
     ):
         title_counts[table.iloc[0]["team"]] += 1
@@ -487,6 +568,8 @@ def summary_table(
             relegated[team] += 1
         for _, row in table.iterrows():
             points_totals[row["team"]] += row["points"]
+            wins_totals[row["team"]] += row["wins"]
+            gd_totals[row["team"]] += row["gd"]
 
     rows = []
     for team in teams:
@@ -494,13 +577,17 @@ def summary_table(
             {
                 "team": team,
                 "points": points_totals[team] / iterations,
+                "wins": wins_totals[team] / iterations,
+                "gd": gd_totals[team] / iterations,
                 "title": title_counts[team] / iterations,
                 "relegation": relegated[team] / iterations,
             }
         )
 
     df = pd.DataFrame(rows)
-    df = df.sort_values("points", ascending=False).reset_index(drop=True)
+    df = df.sort_values(["points", "wins", "gd"], ascending=[False, False, False]).reset_index(drop=True)
     df["position"] = range(1, len(df) + 1)
     df["points"] = df["points"].round().astype(int)
-    return df[["position", "team", "points", "title", "relegation"]]
+    df["wins"] = df["wins"].round().astype(int)
+    df["gd"] = df["gd"].round().astype(int)
+    return df[["position", "team", "points", "wins", "gd", "title", "relegation"]]
