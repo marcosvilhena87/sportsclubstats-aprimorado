@@ -191,6 +191,22 @@ def test_simulate_chances_invalid_params():
         simulator.simulate_chances(df, iterations=1, home_advantage=0, progress=False)
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        simulator.simulate_chances,
+        simulator.simulate_relegation_chances,
+        simulator.simulate_final_table,
+        simulator.summary_table,
+    ],
+)
+@pytest.mark.parametrize("iter_count", [0, -1])
+def test_iterations_must_be_positive(func, iter_count):
+    df = parse_matches("data/Brasileirao2024A.txt")
+    with pytest.raises(ValueError):
+        func(df, iterations=iter_count, progress=False)
+
+
 def test_simulate_final_table_custom_params_deterministic():
     df = parse_matches("data/Brasileirao2024A.txt")
     rng = np.random.default_rng(9)
