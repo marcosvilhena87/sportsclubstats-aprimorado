@@ -69,12 +69,17 @@ def parse_matches(path: str | Path) -> pd.DataFrame:
     """Return a DataFrame of fixtures and results."""
     rows: list[dict] = []
     in_games = False
+    saw_begin = False
+    saw_end = False
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            if line.strip() == "GamesBegin":
+            stripped = line.strip()
+            if stripped == "GamesBegin":
+                saw_begin = True
                 in_games = True
                 continue
-            if line.strip() == "GamesEnd":
+            if stripped == "GamesEnd":
+                saw_end = True
                 break
             if not in_games:
                 continue
@@ -104,6 +109,8 @@ def parse_matches(path: str | Path) -> pd.DataFrame:
                         "away_score": np.nan,
                     }
                 )
+    if not (saw_begin and saw_end):
+        raise ValueError("Matches file must contain 'GamesBegin' and 'GamesEnd' markers")
     return pd.DataFrame(rows)
 
 
