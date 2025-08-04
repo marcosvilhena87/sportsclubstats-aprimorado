@@ -24,6 +24,11 @@ import numpy as np
 import pandas as pd
 import math
 
+try:  # Optional dependency for fast Poisson quantile
+    from scipy.stats import poisson as _scipy_poisson  # type: ignore
+except Exception:  # pragma: no cover - SciPy is optional
+    _scipy_poisson = None
+
 # ---------------------------------------------------------------------------
 # Default simulation parameters
 # ---------------------------------------------------------------------------
@@ -220,6 +225,28 @@ def league_table(matches: pd.DataFrame) -> pd.DataFrame:
 # Simulation helpers
 # ---------------------------------------------------------------------------
 
+
+def _poisson_ppf(u: float, lam: float) -> int:
+    """Return the Poisson quantile for ``u`` with mean ``lam``.
+
+    When SciPy is available this delegates to ``scipy.stats.poisson.ppf``
+    which uses a highly optimised implementation. A pure Python cumulative
+    approach is provided as a fallback for environments without SciPy.
+    """
+
+    if _scipy_poisson is not None:
+        return int(_scipy_poisson.ppf(u, lam))
+
+    k = 0
+    p = math.exp(-lam)
+    cdf = p
+    while u > cdf:
+        k += 1
+        p *= lam / k
+        cdf += p
+    return k
+
+
 def _simulate_table(
     played_df: pd.DataFrame,
     remaining: pd.DataFrame,
@@ -277,19 +304,8 @@ def _simulate_table(
                 z = rng.multivariate_normal([0.0, 0.0], [[1.0, rho], [rho, 1.0]])
                 u1 = 0.5 * (1.0 + math.erf(z[0] / math.sqrt(2.0)))
                 u2 = 0.5 * (1.0 + math.erf(z[1] / math.sqrt(2.0)))
-
-                def poisson_ppf(u: float, lam: float) -> int:
-                    k = 0
-                    p = math.exp(-lam)
-                    cdf = p
-                    while u > cdf:
-                        k += 1
-                        p *= lam / k
-                        cdf += p
-                    return k
-
-                hs = poisson_ppf(u1, hm)
-                as_ = poisson_ppf(u2, am)
+                hs = _poisson_ppf(u1, hm)
+                as_ = _poisson_ppf(u2, am)
             else:
                 hs = int(rng.poisson(hm))
                 as_ = int(rng.poisson(am))
