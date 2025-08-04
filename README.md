@@ -1,6 +1,6 @@
 # Brasileirão Simulator
 
-This project provides a simple simulator for the 2025 Brasileirão Série A season. It parses the fixtures provided in `data/Brasileirao2025A.txt`, builds a league table from played matches and simulates the remaining games many times to estimate title and relegation probabilities.
+This project provides a simple simulator for the 2025 Brasileirão Série A season. It parses the fixtures provided in `data/Brasileirao2025A.txt`, builds a league table from played matches and simulates the remaining games many times to estimate title, top-four and relegation probabilities.
 
 ## Usage
 
@@ -63,7 +63,7 @@ By default matches are simulated purely at random with all teams considered
 equal. When expected goals are supplied the scores are drawn from Poisson
 distributions using those averages.
 
-The script outputs the estimated chance of winning the title for each team. It then prints the probability of each side finishing in the bottom four and being relegated. It also estimates the average final position and points of every club.
+The script outputs the estimated chance of winning the title and of finishing in the top four for each team. It then prints the probability of each side finishing in the bottom four and being relegated. It also estimates the average final position and points of every club.
 All of these metrics are derived from a single Monte Carlo loop so that title chances, relegation odds and projected points remain consistent.
 
 ## Tie-break Rules

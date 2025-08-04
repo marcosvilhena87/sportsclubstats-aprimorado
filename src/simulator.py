@@ -643,6 +643,7 @@ def summary_table(
 
     teams = pd.unique(matches[["home_team", "away_team"]].values.ravel())
     title_counts = {t: 0 for t in teams}
+    top4_counts = {t: 0 for t in teams}
     relegated = {t: 0 for t in teams}
     points_totals = {t: 0.0 for t in teams}
     wins_totals = {t: 0.0 for t in teams}
@@ -669,6 +670,8 @@ def summary_table(
         n_jobs=n_jobs,
     ):
         title_counts[table.iloc[0]["team"]] += 1
+        for team in table.head(4)["team"]:
+            top4_counts[team] += 1
         for team in table.tail(4)["team"]:
             relegated[team] += 1
         for _, row in table.iterrows():
@@ -685,6 +688,7 @@ def summary_table(
                 "wins": wins_totals[team] / iterations,
                 "gd": gd_totals[team] / iterations,
                 "title": title_counts[team] / iterations,
+                "top4": top4_counts[team] / iterations,
                 "relegation": relegated[team] / iterations,
             }
         )
@@ -695,4 +699,4 @@ def summary_table(
     df["points"] = df["points"].round().astype(int)
     df["wins"] = df["wins"].round().astype(int)
     df["gd"] = df["gd"].round().astype(int)
-    return df[["position", "team", "points", "wins", "gd", "title", "relegation"]]
+    return df[["position", "team", "points", "wins", "gd", "title", "top4", "relegation"]]
