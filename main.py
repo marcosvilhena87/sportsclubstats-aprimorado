@@ -20,7 +20,7 @@ from simulator import (
     DEFAULT_TIE_PERCENT,
     DEFAULT_HOME_FIELD_ADVANTAGE,
 )
-from calibration import estimate_parameters
+from calibration import estimate_parameters, estimate_goal_means
 
 
 
@@ -100,6 +100,7 @@ def main() -> None:
             f for f in season_files if os.path.abspath(f) != os.path.abspath(args.file)
         ]
         args.tie_percent, args.home_advantage = estimate_parameters(season_files)
+        args.home_goals_mean, args.away_goals_mean = estimate_goal_means(season_files)
 
     matches = parse_matches(args.file)
     if args.from_date:

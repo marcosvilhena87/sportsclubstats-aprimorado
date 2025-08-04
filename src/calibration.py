@@ -49,6 +49,40 @@ def estimate_parameters(paths: List[str]) -> tuple[float, float]:
     return tie_percent, home_advantage
 
 
+def estimate_goal_means(paths: List[str]) -> tuple[float, float]:
+    """Estimate average goals scored by home and away teams.
+
+    Parameters
+    ----------
+    paths:
+        A list of text file paths containing fixture results in the
+        SportsClubStats format.
+
+    Returns
+    -------
+    tuple[float, float]
+        The ``(home_goals_mean, away_goals_mean)`` calculated from the data.
+    """
+
+    total_games = 0
+    total_home_goals = 0
+    total_away_goals = 0
+
+    for path in paths:
+        df = parse_matches(path)
+        played = df.dropna(subset=["home_score", "away_score"])
+        total_games += len(played)
+        total_home_goals += played["home_score"].sum()
+        total_away_goals += played["away_score"].sum()
+
+    if total_games == 0:
+        raise ValueError("No played games found in provided paths")
+
+    home_goals_mean = float(total_home_goals / total_games)
+    away_goals_mean = float(total_away_goals / total_games)
+    return home_goals_mean, away_goals_mean
+
+
 def estimate_team_strengths(paths: List[str]) -> Dict[str, tuple[float, float]]:
     """Estimate attack and defense multipliers for each team.
 
