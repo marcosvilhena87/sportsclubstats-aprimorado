@@ -385,6 +385,63 @@ def test_poisson_mode_repeatable():
     pd.testing.assert_frame_equal(t1, t2)
 
 
+def test_correlated_poisson_repeatable():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(321)
+    t1 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.4,
+        away_goals_mean=1.1,
+        rho=0.3,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(321)
+    t2 = simulator.summary_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.4,
+        away_goals_mean=1.1,
+        rho=0.3,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
+def test_simulate_table_invalid_rho():
+    played, remaining = _minimal_matches()
+    rng = np.random.default_rng(10)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(
+            played,
+            remaining,
+            rng,
+            home_goals_mean=1.0,
+            away_goals_mean=1.0,
+            rho=1.2,
+        )
+    with pytest.raises(ValueError):
+        simulator._simulate_table(
+            played,
+            remaining,
+            rng,
+            home_goals_mean=1.0,
+            away_goals_mean=1.0,
+            rho=-1.1,
+        )
+    with pytest.raises(ValueError):
+        simulator._simulate_table(
+            played,
+            remaining,
+            rng,
+            rho=0.2,
+        )
+
+
 def test_simulate_table_invalid_goal_means():
     played, remaining = _minimal_matches()
     rng = np.random.default_rng(3)
