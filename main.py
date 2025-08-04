@@ -20,7 +20,11 @@ from simulator import (
     DEFAULT_TIE_PERCENT,
     DEFAULT_HOME_FIELD_ADVANTAGE,
 )
-from calibration import estimate_parameters, estimate_goal_means
+from calibration import (
+    estimate_parameters,
+    estimate_goal_means,
+    estimate_team_strengths,
+)
 
 
 
@@ -81,6 +85,11 @@ def main() -> None:
         help="estimate parameters from past seasons",
     )
     parser.add_argument(
+        "--auto-team-strengths",
+        action="store_true",
+        help="estimate attack and defense multipliers from past seasons",
+    )
+    parser.add_argument(
         "--from-date",
         dest="from_date",
         default=None,
@@ -93,14 +102,23 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.auto_calibrate:
+    season_files: list[str] | None = None
+    if args.auto_calibrate or args.auto_team_strengths:
         pattern = os.path.join("data", "Brasileirao????A.txt")
         season_files = sorted(glob.glob(pattern))
         season_files = [
             f for f in season_files if os.path.abspath(f) != os.path.abspath(args.file)
         ]
+
+    if args.auto_calibrate:
+        season_files = season_files or []
         args.tie_percent, args.home_advantage = estimate_parameters(season_files)
         args.home_goals_mean, args.away_goals_mean = estimate_goal_means(season_files)
+
+    team_params = None
+    if args.auto_team_strengths:
+        season_files = season_files or []
+        team_params = estimate_team_strengths(season_files)
 
     matches = parse_matches(args.file)
     if args.from_date:
@@ -117,6 +135,7 @@ def main() -> None:
         progress=args.progress,
         tie_prob=tie_prob,
         home_advantage=home_adv,
+        team_params=team_params,
         home_goals_mean=args.home_goals_mean,
         away_goals_mean=args.away_goals_mean,
         n_jobs=args.jobs,
