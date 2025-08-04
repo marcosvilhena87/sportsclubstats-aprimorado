@@ -261,8 +261,10 @@ def _simulate_table(
         tp = tie_prob
         ha = home_advantage
         if team_params is not None:
-            ha *= team_params.get(row["home_team"], (1.0, 1.0))[0] / team_params.get(row["away_team"], (1.0, 1.0))[1]
-            away_factor = team_params.get(row["away_team"], (1.0, 1.0))[0] / team_params.get(row["home_team"], (1.0, 1.0))[1]
+            home_att, home_def = team_params.get(row["home_team"], (1.0, 1.0))
+            away_att, away_def = team_params.get(row["away_team"], (1.0, 1.0))
+            ha *= home_att / away_def
+            away_factor = away_att / home_def
         else:
             away_factor = 1.0
 
