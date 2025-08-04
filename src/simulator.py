@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover - tqdm is optional in tests
 
 import numpy as np
 import pandas as pd
+import math
 
 # ---------------------------------------------------------------------------
 # Default simulation parameters
@@ -222,13 +223,15 @@ def _simulate_table(
     team_params: Dict[str, tuple[float, float]] | None = None,
     home_goals_mean: float | None = None,
     away_goals_mean: float | None = None,
+    rho: float | None = None,
 ) -> pd.DataFrame:
     """Simulate remaining fixtures.
 
     When ``home_goals_mean`` or ``away_goals_mean`` is provided the match
     scores are sampled from Poisson distributions with the given means scaled by
-    ``home_advantage`` and any ``team_params``. Otherwise the classic
-    win/draw/loss model based on ``tie_prob`` is used.
+    ``home_advantage`` and any ``team_params``. If ``rho`` is specified the home
+    and away goals are drawn from correlated Poisson variates. Otherwise the
+    classic win/draw/loss model based on ``tie_prob`` is used.
     """
 
     if not 0.0 <= tie_prob <= 1.0:
@@ -240,6 +243,10 @@ def _simulate_table(
         raise ValueError("home_goals_mean must be greater than zero")
     if away_goals_mean is not None and away_goals_mean <= 0:
         raise ValueError("away_goals_mean must be greater than zero")
+    if rho is not None and (rho <= -1 or rho >= 1):
+        raise ValueError("rho must be between -1 and 1")
+    if rho is not None and home_goals_mean is None and away_goals_mean is None:
+        raise ValueError("rho requires goal-based simulation")
 
     sims: list[dict] = []
 
@@ -257,8 +264,26 @@ def _simulate_table(
             am = away_goals_mean if away_goals_mean is not None else 1.0
             hm *= ha
             am *= away_factor
-            hs = int(rng.poisson(hm))
-            as_ = int(rng.poisson(am))
+            if rho is not None:
+                z = rng.multivariate_normal([0.0, 0.0], [[1.0, rho], [rho, 1.0]])
+                u1 = 0.5 * (1.0 + math.erf(z[0] / math.sqrt(2.0)))
+                u2 = 0.5 * (1.0 + math.erf(z[1] / math.sqrt(2.0)))
+
+                def poisson_ppf(u: float, lam: float) -> int:
+                    k = 0
+                    p = math.exp(-lam)
+                    cdf = p
+                    while u > cdf:
+                        k += 1
+                        p *= lam / k
+                        cdf += p
+                    return k
+
+                hs = poisson_ppf(u1, hm)
+                as_ = poisson_ppf(u2, am)
+            else:
+                hs = int(rng.poisson(hm))
+                as_ = int(rng.poisson(am))
         else:
             rest = 1.0 - tp
             strength_sum = ha + away_factor
@@ -298,6 +323,7 @@ def _iterate_tables(
     team_params: Dict[str, tuple[float, float]] | None,
     home_goals_mean: float | None,
     away_goals_mean: float | None,
+    rho: float | None,
     n_jobs: int,
 ):
     """Yield successive simulated tables.
@@ -322,6 +348,7 @@ def _iterate_tables(
                 team_params=team_params,
                 home_goals_mean=home_goals_mean,
                 away_goals_mean=away_goals_mean,
+                rho=rho,
             )
 
         for start in range(0, iterations, _BATCH_SIZE):
@@ -347,6 +374,7 @@ def _iterate_tables(
                 team_params=team_params,
                 home_goals_mean=home_goals_mean,
                 away_goals_mean=away_goals_mean,
+                rho=rho,
             )
 
 
@@ -366,6 +394,7 @@ def simulate_chances(
     team_params: Dict[str, tuple[float, float]] | None = None,
     home_goals_mean: float | None = None,
     away_goals_mean: float | None = None,
+    rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return title probabilities.
@@ -396,6 +425,7 @@ def simulate_chances(
         team_params=team_params,
         home_goals_mean=home_goals_mean,
         away_goals_mean=away_goals_mean,
+        rho=rho,
         n_jobs=n_jobs,
     ):
         champs[table.iloc[0]["team"]] += 1
@@ -416,6 +446,7 @@ def simulate_relegation_chances(
     team_params: Dict[str, tuple[float, float]] | None = None,
     home_goals_mean: float | None = None,
     away_goals_mean: float | None = None,
+    rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
@@ -443,6 +474,7 @@ def simulate_relegation_chances(
         team_params=team_params,
         home_goals_mean=home_goals_mean,
         away_goals_mean=away_goals_mean,
+        rho=rho,
         n_jobs=n_jobs,
     ):
         for team in table.tail(4)["team"]:
@@ -464,6 +496,7 @@ def simulate_final_table(
     team_params: Dict[str, tuple[float, float]] | None = None,
     home_goals_mean: float | None = None,
     away_goals_mean: float | None = None,
+    rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
@@ -493,6 +526,7 @@ def simulate_final_table(
         team_params=team_params,
         home_goals_mean=home_goals_mean,
         away_goals_mean=away_goals_mean,
+        rho=rho,
         n_jobs=n_jobs,
     ):
         for idx, row in table.iterrows():
@@ -525,6 +559,7 @@ def summary_table(
     team_params: Dict[str, tuple[float, float]] | None = None,
     home_goals_mean: float | None = None,
     away_goals_mean: float | None = None,
+    rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Return a combined projection table ranked by expected points.
@@ -561,6 +596,7 @@ def summary_table(
         team_params=team_params,
         home_goals_mean=home_goals_mean,
         away_goals_mean=away_goals_mean,
+        rho=rho,
         n_jobs=n_jobs,
     ):
         title_counts[table.iloc[0]["team"]] += 1

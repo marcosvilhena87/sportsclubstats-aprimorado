@@ -34,7 +34,8 @@ command line. `DEFAULT_JOBS` still defines the parallelism level.
 Pass `--home-goals-mean` and `--away-goals-mean` to sample scores from Poisson
 distributions with the given expected values instead of the basic win/draw/loss
 model. These options can also be provided programmatically via the simulation
-functions.
+functions. An optional `rho` parameter can be supplied alongside the expected
+goals to introduce correlation between the home and away scorelines.
 
 Alternatively, pass `--auto-calibrate` to estimate these parameters using all
 historical files in the `data/` directory. The computed draw rate and home
@@ -97,7 +98,8 @@ so simulations automatically run in parallel. When ``n_jobs`` is greater than
 one, joblib is used to distribute the work across multiple workers. The tie
 percentage and home advantage are fixed at their defaults of 33.3% and 1.0.
 Provide expected goal values via ``home_goals_mean`` and ``away_goals_mean`` to
-enable Poisson-based scoring.
+enable Poisson-based scoring. Add ``rho`` to correlate the home and away goal
+processes when desired.
 
 ## License
 
