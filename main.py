@@ -80,6 +80,12 @@ def main() -> None:
         help="expected goals for the away side when using Poisson scoring",
     )
     parser.add_argument(
+        "--rho",
+        type=float,
+        default=None,
+        help="correlação entre gols (Poisson)",
+    )
+    parser.add_argument(
         "--auto-calibrate",
         action="store_true",
         help="estimate parameters from past seasons",
@@ -138,6 +144,7 @@ def main() -> None:
         team_params=team_params,
         home_goals_mean=args.home_goals_mean,
         away_goals_mean=args.away_goals_mean,
+        rho=args.rho,
         n_jobs=args.jobs,
     )
     if args.html_output:
