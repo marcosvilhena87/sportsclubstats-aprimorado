@@ -207,6 +207,22 @@ def test_iterations_must_be_positive(func, iter_count):
         func(df, iterations=iter_count, progress=False)
 
 
+@pytest.mark.parametrize(
+    "func",
+    [
+        simulator.simulate_chances,
+        simulator.simulate_relegation_chances,
+        simulator.simulate_final_table,
+        simulator.summary_table,
+    ],
+)
+@pytest.mark.parametrize("n_jobs", [0, -1])
+def test_n_jobs_must_be_positive(func, n_jobs):
+    df = parse_matches("data/Brasileirao2024A.txt")
+    with pytest.raises(ValueError):
+        func(df, iterations=1, progress=False, n_jobs=n_jobs)
+
+
 def test_simulate_final_table_custom_params_deterministic():
     df = parse_matches("data/Brasileirao2024A.txt")
     rng = np.random.default_rng(9)
