@@ -92,9 +92,13 @@ def main() -> None:
         help="estimate parameters from past seasons",
     )
     parser.add_argument(
-        "--auto-team-strengths",
-        action="store_true",
-        help="estimate attack and defense multipliers from past seasons",
+        "--no-auto-team-strengths",
+        action="store_false",
+        dest="auto_team_strengths",
+        default=True,
+        help=(
+            "disable automatic attack and defense multiplier estimation from past seasons"
+        ),
     )
     parser.add_argument(
         "--from-date",
