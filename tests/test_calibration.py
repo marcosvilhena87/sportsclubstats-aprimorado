@@ -27,6 +27,14 @@ def test_estimate_team_strengths_repeatable():
     assert round(strengths["Fluminense"][1], 4) == 0.8396
 
 
+def test_estimate_team_strengths_decay_zero_matches_latest_only():
+    s_latest = estimate_team_strengths(["data/Brasileirao2024A.txt"])
+    s_decay = estimate_team_strengths(
+        ["data/Brasileirao2024A.txt", "data/Brasileirao2023A.txt"], decay=0.0
+    )
+    assert s_latest == s_decay
+
+
 def test_estimate_goal_means_repeatable():
     hm, am = estimate_goal_means(["data/Brasileirao2024A.txt"])
     assert round(hm, 4) == 1.4105

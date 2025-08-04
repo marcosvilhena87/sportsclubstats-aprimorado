@@ -45,11 +45,15 @@ advantage are then used for the simulation. Combine this flag with
 `--auto-team-strengths` to automatically incorporate team quality estimates.
 
 Use ``estimate_team_strengths`` to calculate attack and defense multipliers for
-each club:
+each club.  Pass multiple seasons and an optional ``decay`` factor to weigh
+recent results more heavily:
 
 ```python
 from calibration import estimate_team_strengths
-strengths = estimate_team_strengths(["data/Brasileirao2024A.txt"])
+strengths = estimate_team_strengths([
+    "data/Brasileirao2024A.txt",
+    "data/Brasileirao2023A.txt",
+], decay=0.9)
 ```
 
 Pass ``strengths`` via the ``team_params`` argument when calling the simulation
