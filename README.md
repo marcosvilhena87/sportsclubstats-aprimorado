@@ -36,8 +36,8 @@ command line. `DEFAULT_JOBS` still defines the parallelism level.
 Pass `--home-goals-mean` and `--away-goals-mean` to sample scores from Poisson
 distributions with the given expected values instead of the basic win/draw/loss
 model. These options can also be provided programmatically via the simulation
-functions. An optional `rho` parameter can be supplied alongside the expected
-goals to introduce correlation between the home and away scorelines.
+functions. Pass `--rho` to introduce correlation between the home and away
+scorelines when using Poisson scoring.
 
 Alternatively, pass `--auto-calibrate` to estimate these parameters using all
 historical files in the `data/` directory. The computed draw rate and home

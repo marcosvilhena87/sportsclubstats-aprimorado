@@ -442,6 +442,33 @@ def test_correlated_poisson_repeatable():
     pd.testing.assert_frame_equal(t1, t2)
 
 
+def test_final_table_correlated_poisson_repeatable():
+    df = parse_matches("data/Brasileirao2024A.txt")
+    rng = np.random.default_rng(222)
+    t1 = simulator.simulate_final_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.3,
+        away_goals_mean=1.0,
+        rho=0.25,
+        progress=False,
+        n_jobs=2,
+    )
+    rng = np.random.default_rng(222)
+    t2 = simulator.simulate_final_table(
+        df,
+        iterations=5,
+        rng=rng,
+        home_goals_mean=1.3,
+        away_goals_mean=1.0,
+        rho=0.25,
+        progress=False,
+        n_jobs=2,
+    )
+    pd.testing.assert_frame_equal(t1, t2)
+
+
 def test_simulate_table_invalid_rho():
     played, remaining = _minimal_matches()
     rng = np.random.default_rng(10)
