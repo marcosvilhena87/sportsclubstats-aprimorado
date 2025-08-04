@@ -9,14 +9,21 @@ import pandas as pd
 from simulator import parse_matches
 
 
-def estimate_parameters(paths: List[str]) -> tuple[float, float]:
+def estimate_parameters(
+    paths: List[str], decay: float | None = None
+) -> tuple[float, float]:
     """Estimate draw rate and home advantage from past seasons.
 
     Parameters
     ----------
     paths:
         A list of text file paths containing fixture results in the
-        SportsClubStats format.
+        SportsClubStats format.  Files should be ordered from most recent to
+        oldest when using ``decay``.
+    decay:
+        Optional exponential decay factor applied to older seasons. Games from
+        the ``n``th file in ``paths`` are weighted by ``decay**n``. Use ``None``
+        to give all seasons equal weight.
 
     Returns
     -------
@@ -24,18 +31,21 @@ def estimate_parameters(paths: List[str]) -> tuple[float, float]:
         The ``(tie_percent, home_advantage)`` calculated from the data.
     """
 
-    total_games = 0
-    home_wins = 0
-    away_wins = 0
-    draws = 0
+    total_games = 0.0
+    home_wins = 0.0
+    away_wins = 0.0
+    draws = 0.0
 
-    for path in paths:
+    for n, path in enumerate(paths):
+        weight = 1.0 if decay is None else decay**n
+        if weight == 0:
+            continue
         df = parse_matches(path)
         played = df.dropna(subset=["home_score", "away_score"])
-        total_games += len(played)
-        home_wins += (played["home_score"] > played["away_score"]).sum()
-        away_wins += (played["home_score"] < played["away_score"]).sum()
-        draws += (played["home_score"] == played["away_score"]).sum()
+        total_games += len(played) * weight
+        home_wins += (played["home_score"] > played["away_score"]).sum() * weight
+        away_wins += (played["home_score"] < played["away_score"]).sum() * weight
+        draws += (played["home_score"] == played["away_score"]).sum() * weight
 
     if total_games == 0:
         raise ValueError("No played games found in provided paths")
@@ -49,14 +59,21 @@ def estimate_parameters(paths: List[str]) -> tuple[float, float]:
     return tie_percent, home_advantage
 
 
-def estimate_goal_means(paths: List[str]) -> tuple[float, float]:
+def estimate_goal_means(
+    paths: List[str], decay: float | None = None
+) -> tuple[float, float]:
     """Estimate average goals scored by home and away teams.
 
     Parameters
     ----------
     paths:
         A list of text file paths containing fixture results in the
-        SportsClubStats format.
+        SportsClubStats format.  Files should be ordered from most recent to
+        oldest when using ``decay``.
+    decay:
+        Optional exponential decay factor applied to older seasons. Games from
+        the ``n``th file in ``paths`` are weighted by ``decay**n``. Use ``None``
+        to give all seasons equal weight.
 
     Returns
     -------
@@ -64,16 +81,19 @@ def estimate_goal_means(paths: List[str]) -> tuple[float, float]:
         The ``(home_goals_mean, away_goals_mean)`` calculated from the data.
     """
 
-    total_games = 0
-    total_home_goals = 0
-    total_away_goals = 0
+    total_games = 0.0
+    total_home_goals = 0.0
+    total_away_goals = 0.0
 
-    for path in paths:
+    for n, path in enumerate(paths):
+        weight = 1.0 if decay is None else decay**n
+        if weight == 0:
+            continue
         df = parse_matches(path)
         played = df.dropna(subset=["home_score", "away_score"])
-        total_games += len(played)
-        total_home_goals += played["home_score"].sum()
-        total_away_goals += played["away_score"].sum()
+        total_games += len(played) * weight
+        total_home_goals += played["home_score"].sum() * weight
+        total_away_goals += played["away_score"].sum() * weight
 
     if total_games == 0:
         raise ValueError("No played games found in provided paths")

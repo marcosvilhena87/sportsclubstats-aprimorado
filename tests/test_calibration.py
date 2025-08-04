@@ -20,6 +20,15 @@ def test_estimate_parameters_multiple_files_repeatable():
     assert round(ha, 4) == 1.7635
 
 
+def test_estimate_parameters_decay_zero_matches_latest_only():
+    tie_latest, ha_latest = estimate_parameters(["data/Brasileirao2024A.txt"])
+    tie_decay, ha_decay = estimate_parameters(
+        ["data/Brasileirao2024A.txt", "data/Brasileirao2023A.txt"], decay=0.0
+    )
+    assert tie_latest == tie_decay
+    assert ha_latest == ha_decay
+
+
 def test_estimate_team_strengths_repeatable():
     strengths = estimate_team_strengths(["data/Brasileirao2024A.txt"])
     assert len(strengths) == 20
@@ -48,4 +57,13 @@ def test_estimate_goal_means_multiple_files_repeatable():
     ])
     assert round(hm, 4) == 1.4145
     assert round(am, 4) == 1.0526
+
+
+def test_estimate_goal_means_decay_zero_matches_latest_only():
+    hm_latest, am_latest = estimate_goal_means(["data/Brasileirao2024A.txt"])
+    hm_decay, am_decay = estimate_goal_means(
+        ["data/Brasileirao2024A.txt", "data/Brasileirao2023A.txt"], decay=0.0
+    )
+    assert hm_latest == hm_decay
+    assert am_latest == am_decay
 
