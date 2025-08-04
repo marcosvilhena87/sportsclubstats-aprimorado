@@ -27,6 +27,13 @@ def test_parse_matches_missing_end(tmp_path):
         parse_matches(p)
 
 
+def test_parse_matches_invalid_line(tmp_path):
+    p = tmp_path / "matches.txt"
+    p.write_text("GamesBegin\ninvalid stuff\nGamesEnd\n")
+    with pytest.raises(ValueError, match="invalid stuff"):
+        parse_matches(p)
+
+
 def test_league_table():
     df = parse_matches('data/Brasileirao2024A.txt')
     table = league_table(df)

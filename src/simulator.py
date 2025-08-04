@@ -90,6 +90,9 @@ def parse_matches(path: str | Path) -> pd.DataFrame:
             if not in_games:
                 continue
             line = line.rstrip("\n")
+            # Skip known metadata lines that may appear within the games section
+            if not line or line.startswith("TeamListedFirst:"):
+                continue
             m = SCORE_PATTERN.match(line)
             if m:
                 date_str, home, hs, as_, away = m.groups()
@@ -115,6 +118,10 @@ def parse_matches(path: str | Path) -> pd.DataFrame:
                         "away_score": np.nan,
                     }
                 )
+                continue
+            # Any line within the Games section that doesn't match one of the
+            # expected patterns should trigger an error to aid debugging.
+            raise ValueError(f"Unrecognized line in matches file: {line}")
     if not (saw_begin and saw_end):
         raise ValueError("Matches file must contain 'GamesBegin' and 'GamesEnd' markers")
     return pd.DataFrame(rows)
