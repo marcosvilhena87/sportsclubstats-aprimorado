@@ -24,6 +24,7 @@ from calibration import (
     estimate_parameters,
     estimate_goal_means,
     estimate_team_strengths,
+    estimate_rho,
 )
 
 
@@ -120,6 +121,7 @@ def main() -> None:
         season_files = season_files or []
         args.tie_percent, args.home_advantage = estimate_parameters(season_files)
         args.home_goals_mean, args.away_goals_mean = estimate_goal_means(season_files)
+        args.rho = estimate_rho(season_files)
 
     team_params = None
     if args.auto_team_strengths:

@@ -2,7 +2,12 @@ import sys, os; sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(
 
 import sys, os; sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from calibration import estimate_parameters, estimate_team_strengths, estimate_goal_means
+from calibration import (
+    estimate_parameters,
+    estimate_team_strengths,
+    estimate_goal_means,
+    estimate_rho,
+)
 
 
 def test_estimate_parameters_repeatable():
@@ -66,4 +71,25 @@ def test_estimate_goal_means_decay_zero_matches_latest_only():
     )
     assert hm_latest == hm_decay
     assert am_latest == am_decay
+
+
+def test_estimate_rho_repeatable():
+    rho = estimate_rho(["data/Brasileirao2024A.txt"])
+    assert round(rho, 4) == -0.06
+
+
+def test_estimate_rho_multiple_files_repeatable():
+    rho = estimate_rho([
+        "data/Brasileirao2023A.txt",
+        "data/Brasileirao2024A.txt",
+    ])
+    assert round(rho, 4) == -0.014
+
+
+def test_estimate_rho_decay_zero_matches_latest_only():
+    rho_latest = estimate_rho(["data/Brasileirao2024A.txt"])
+    rho_decay = estimate_rho(
+        ["data/Brasileirao2024A.txt", "data/Brasileirao2023A.txt"], decay=0.0
+    )
+    assert rho_latest == rho_decay
 
