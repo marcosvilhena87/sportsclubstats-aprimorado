@@ -410,6 +410,9 @@ def simulate_chances(
 
     """
 
+    if iterations <= 0:
+        raise ValueError("iterations must be greater than 0")
+
     if rng is None:
         rng = np.random.default_rng()
 
@@ -460,6 +463,9 @@ def simulate_relegation_chances(
 ) -> Dict[str, float]:
     """Return probabilities of finishing in the bottom four."""
 
+    if iterations <= 0:
+        raise ValueError("iterations must be greater than 0")
+
     if rng is None:
         rng = np.random.default_rng()
 
@@ -509,6 +515,9 @@ def simulate_final_table(
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
     """Project average finishing position and points."""
+
+    if iterations <= 0:
+        raise ValueError("iterations must be greater than 0")
 
     if rng is None:
         rng = np.random.default_rng()
@@ -576,6 +585,9 @@ def summary_table(
     The ``position`` column corresponds to the rank after sorting by the
     expected point totals.
     """
+
+    if iterations <= 0:
+        raise ValueError("iterations must be greater than 0")
 
     if rng is None:
         rng = np.random.default_rng()
