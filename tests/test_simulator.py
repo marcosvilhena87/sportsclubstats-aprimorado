@@ -117,8 +117,15 @@ def test_summary_table_deterministic():
         "wins",
         "gd",
         "title",
+        "top4",
         "relegation",
     }.issubset(table1.columns)
+
+
+def test_summary_table_top4_probabilities_sum_to_four():
+    df = parse_matches('data/Brasileirao2024A.txt')
+    table = simulator.summary_table(df, iterations=10, progress=False, n_jobs=2)
+    assert abs(table['top4'].sum() - 4.0) < 1e-6
 
 
 def test_league_table_tiebreakers():
