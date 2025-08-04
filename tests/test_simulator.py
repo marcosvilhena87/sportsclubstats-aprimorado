@@ -531,4 +531,13 @@ def test_simulate_table_invalid_goal_means():
         simulator._simulate_table(played, remaining, rng, away_goals_mean=-1)
 
 
+def test_simulate_table_requires_both_means():
+    played, remaining = _minimal_matches()
+    rng = np.random.default_rng(5)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, home_goals_mean=1.2)
+    with pytest.raises(ValueError):
+        simulator._simulate_table(played, remaining, rng, away_goals_mean=1.1)
+
+
 

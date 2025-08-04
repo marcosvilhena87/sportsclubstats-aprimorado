@@ -281,11 +281,12 @@ def _simulate_table(
 ) -> pd.DataFrame:
     """Simulate remaining fixtures.
 
-    When ``home_goals_mean`` or ``away_goals_mean`` is provided the match
+    When both ``home_goals_mean`` and ``away_goals_mean`` are provided the match
     scores are sampled from Poisson distributions with the given means scaled by
-    ``home_advantage`` and any ``team_params``. If ``rho`` is specified the home
-    and away goals are drawn from correlated Poisson variates. Otherwise the
-    classic win/draw/loss model based on ``tie_prob`` is used.
+    ``home_advantage`` and any ``team_params``. Passing only one of the means
+    is invalid. If ``rho`` is specified the home and away goals are drawn from
+    correlated Poisson variates. Otherwise the classic win/draw/loss model based
+    on ``tie_prob`` is used.
     """
 
     if not 0.0 <= tie_prob <= 1.0:
@@ -297,9 +298,13 @@ def _simulate_table(
         raise ValueError("home_goals_mean must be greater than zero")
     if away_goals_mean is not None and away_goals_mean <= 0:
         raise ValueError("away_goals_mean must be greater than zero")
+    if (home_goals_mean is None) != (away_goals_mean is None):
+        raise ValueError(
+            "home_goals_mean and away_goals_mean must both be provided"
+        )
     if rho is not None and (rho <= -1 or rho >= 1):
         raise ValueError("rho must be between -1 and 1")
-    if rho is not None and home_goals_mean is None and away_goals_mean is None:
+    if rho is not None and home_goals_mean is None:
         raise ValueError("rho requires goal-based simulation")
 
     sims: list[dict] = []
@@ -444,6 +449,8 @@ def simulate_chances(
 ) -> Dict[str, float]:
     """Return title probabilities.
 
+    If goal means are provided, both ``home_goals_mean`` and ``away_goals_mean``
+    must be supplied to enable Poisson-based scoring.
     """
 
     if n_jobs <= 0:
@@ -500,7 +507,11 @@ def simulate_relegation_chances(
     rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> Dict[str, float]:
-    """Return probabilities of finishing in the bottom four."""
+    """Return probabilities of finishing in the bottom four.
+
+    If goal means are provided, both ``home_goals_mean`` and ``away_goals_mean``
+    must be supplied to enable Poisson-based scoring.
+    """
 
     if n_jobs <= 0:
         raise ValueError("n_jobs must be greater than 0")
@@ -556,7 +567,11 @@ def simulate_final_table(
     rho: float | None = None,
     n_jobs: int = DEFAULT_JOBS,
 ) -> pd.DataFrame:
-    """Project average finishing position and points."""
+    """Project average finishing position and points.
+
+    If goal means are provided, both ``home_goals_mean`` and ``away_goals_mean``
+    must be supplied to enable Poisson-based scoring.
+    """
 
     if n_jobs <= 0:
         raise ValueError("n_jobs must be greater than 0")
@@ -628,7 +643,8 @@ def summary_table(
     """Return a combined projection table ranked by expected points.
 
     The ``position`` column corresponds to the rank after sorting by the
-    expected point totals.
+    expected point totals. If goal means are provided, both ``home_goals_mean``
+    and ``away_goals_mean`` must be supplied to enable Poisson-based scoring.
     """
 
     if n_jobs <= 0:
