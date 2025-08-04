@@ -25,8 +25,9 @@ simulate from that point forward. Use `--auto-calibrate` to derive the draw
 percentage and home advantage from past seasons before running the simulation.
 When this flag is supplied, every file matching `data/Brasileirao????A.txt` is
 loaded automatically (except the file provided via `--file`).
-Pass `--auto-team-strengths` to compute attack and defense multipliers for each
-club from those same historical files and include them in the simulation.
+Team strengths are computed automatically from the same historical files and
+included in the simulation. Use `--no-auto-team-strengths` to skip this
+estimation.
 
 The default draw rate and home-field advantage are
 `DEFAULT_TIE_PERCENT` (33.3) and `DEFAULT_HOME_FIELD_ADVANTAGE` (1.0).
@@ -41,8 +42,8 @@ scorelines when using Poisson scoring.
 
 Alternatively, pass `--auto-calibrate` to estimate these parameters using all
 historical files in the `data/` directory. The computed draw rate and home
-advantage are then used for the simulation. Combine this flag with
-`--auto-team-strengths` to automatically incorporate team quality estimates.
+advantage are then used for the simulation. Team quality estimates are included
+by default; supply `--no-auto-team-strengths` to omit them.
 
 Use ``estimate_team_strengths`` to calculate attack and defense multipliers for
 each club.  Pass multiple seasons and an optional ``decay`` factor to weigh
