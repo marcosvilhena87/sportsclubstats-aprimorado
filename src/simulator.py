@@ -23,6 +23,7 @@ except Exception:  # pragma: no cover - tqdm is optional in tests
 import numpy as np
 import pandas as pd
 import math
+import functools
 
 try:  # Optional dependency for fast Poisson quantile
     from scipy.stats import poisson as _scipy_poisson  # type: ignore
@@ -230,21 +231,40 @@ def _poisson_ppf(u: float, lam: float) -> int:
     """Return the Poisson quantile for ``u`` with mean ``lam``.
 
     When SciPy is available this delegates to ``scipy.stats.poisson.ppf``
-    which uses a highly optimised implementation. A pure Python cumulative
-    approach is provided as a fallback for environments without SciPy.
+    which uses a highly optimised implementation. A NumPy based fallback
+    relying on log-probabilities and binary search is provided when SciPy
+    is unavailable.
     """
 
     if _scipy_poisson is not None:
         return int(_scipy_poisson.ppf(u, lam))
 
-    k = 0
-    p = math.exp(-lam)
-    cdf = p
-    while u > cdf:
-        k += 1
-        p *= lam / k
-        cdf += p
-    return k
+    if lam <= 0:
+        return 0
+
+    cdf = _poisson_cdf_array(float(lam))
+    idx = int(np.searchsorted(cdf, u, side="left"))
+    return idx
+
+
+@functools.lru_cache(maxsize=None)
+def _poisson_cdf_array(lam: float) -> np.ndarray:
+    """Pre-compute the Poisson CDF values for ``lam``.
+
+    The array contains cumulative probabilities up to ``lam + 10 * sqrt(lam)``
+    which effectively captures the upper tail. Results are cached to avoid
+    recomputation when ``_poisson_ppf`` is called repeatedly with the same
+    ``lam``.
+    """
+
+    max_k = int(np.ceil(lam + 10 * math.sqrt(lam)))
+    ks = np.arange(0, max_k + 1)
+    if max_k > 0:
+        log_fact = np.concatenate(([0.0], np.cumsum(np.log(ks[1:], dtype=float))))
+    else:
+        log_fact = np.array([0.0])
+    log_pmf = ks * math.log(lam) - lam - log_fact
+    return np.cumsum(np.exp(log_pmf))
 
 
 def _simulate_table(
