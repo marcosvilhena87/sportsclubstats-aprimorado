@@ -103,6 +103,46 @@ def estimate_goal_means(
     return home_goals_mean, away_goals_mean
 
 
+def estimate_rho(paths: List[str], decay: float | None = None) -> float:
+    """Estimate correlation between home and away goals."""
+
+    total_weight = 0.0
+    sum_home = 0.0
+    sum_away = 0.0
+    sum_home_sq = 0.0
+    sum_away_sq = 0.0
+    sum_prod = 0.0
+
+    for n, path in enumerate(paths):
+        weight = 1.0 if decay is None else decay**n
+        if weight == 0:
+            continue
+        df = parse_matches(path)
+        played = df.dropna(subset=["home_score", "away_score"])
+        if played.empty:
+            continue
+        hs = played["home_score"].astype(float)
+        as_ = played["away_score"].astype(float)
+        total_weight += len(played) * weight
+        sum_home += hs.sum() * weight
+        sum_away += as_.sum() * weight
+        sum_home_sq += (hs**2).sum() * weight
+        sum_away_sq += (as_**2).sum() * weight
+        sum_prod += (hs * as_).sum() * weight
+
+    if total_weight == 0:
+        raise ValueError("No played games found in provided paths")
+
+    mean_home = sum_home / total_weight
+    mean_away = sum_away / total_weight
+    cov = (sum_prod / total_weight) - mean_home * mean_away
+    var_home = (sum_home_sq / total_weight) - mean_home**2
+    var_away = (sum_away_sq / total_weight) - mean_away**2
+    if var_home <= 0 or var_away <= 0:
+        return 0.0
+    return float(cov / (var_home * var_away) ** 0.5)
+
+
 def estimate_team_strengths(
     paths: List[str], decay: float | None = None
 ) -> Dict[str, tuple[float, float]]:

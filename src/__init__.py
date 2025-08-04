@@ -12,7 +12,12 @@ from .simulator import (
     DEFAULT_HOME_FIELD_ADVANTAGE,
     DEFAULT_JOBS,
 )
-from .calibration import estimate_parameters, estimate_team_strengths, estimate_goal_means
+from .calibration import (
+    estimate_parameters,
+    estimate_team_strengths,
+    estimate_goal_means,
+    estimate_rho,
+)
 
 __all__ = [
     "parse_matches",
@@ -28,4 +33,5 @@ __all__ = [
     "estimate_parameters",
     "estimate_team_strengths",
     "estimate_goal_means",
+    "estimate_rho",
 ]
